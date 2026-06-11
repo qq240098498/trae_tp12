@@ -108,6 +108,7 @@ export function getExceptionStatusText(status: ExceptionStatus): string {
     processing: '处理中',
     resolved: '已解决',
     closed: '已关闭',
+    cancelled: '已撤销',
   };
   return map[status];
 }
@@ -128,6 +129,7 @@ export function getExceptionStatusBadgeVariant(status: ExceptionStatus): 'succes
     processing: 'warning',
     resolved: 'success',
     closed: 'default',
+    cancelled: 'danger',
   };
   return map[status];
 }

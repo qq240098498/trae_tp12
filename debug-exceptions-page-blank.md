@@ -8,23 +8,59 @@
 
 | 编号 | 假设 | 可证伪观测点 | 状态 |
 |------|------|--------------|------|
-| H1 | `ExceptionType` 类型与 `lucide-react` 图标类型不匹配导致运行时错误 | 检查控制台是否有 React 渲染错误，检查 `typeIcons` Record 的类型定义 | 待验证 |
-| H2 | `exceptions` 状态数组在初始加载时为 `undefined` 导致 `.filter()` 调用失败 | 在 store 初始化时检查 `exceptions` 是否正确注入，检查 `useAppStore` 返回值 | 待验证 |
-| H3 | 路由配置错误导致组件未正确挂载 | 检查 `App.tsx` 中 `/exceptions` 路由是否正确配置，检查 `exceptions` 目录下 `index.tsx` 是否存在 | 待验证 |
-| H4 | `transportException` 类型定义与 mock 数据不匹配导致渲染时属性访问失败 | 检查 mock 数据中 `processing_logs` 是否正确定义，检查渲染时是否有 `undefined` 属性访问 | 待验证 |
-| H5 | `motion` 动画库的某个动画属性与 React 18 不兼容 | 检查控制台是否有 framer-motion 相关错误 | 待验证 |
+| H1 | `ExceptionType` 类型与 `lucide-react` 图标类型不匹配导致运行时错误 | 检查控制台是否有 React 渲染错误，检查 `typeIcons` Record 的类型定义 | ❌ 已排除 |
+| H2 | `exceptions` 状态数组在初始加载时为 `undefined` 导致 `.filter()` 调用失败 | 在 store 初始化时检查 `exceptions` 是否正确注入，检查 `useAppStore` 返回值 | ❌ 已排除 |
+| H3 | 路由配置错误导致组件未正确挂载 | 检查 `App.tsx` 中 `/exceptions` 路由是否正确配置，检查 `exceptions` 目录下 `index.tsx` 是否存在 | ❌ 已排除 |
+| H4 | `transportException` 类型定义与 mock 数据不匹配导致渲染时属性访问失败 | 检查 mock 数据中 `processing_logs` 是否正确定义，检查渲染时是否有 `undefined` 属性访问 | ✅ 已确认 |
+| H5 | `motion` 动画库的某个动画属性与 React 18 不兼容 | 检查控制台是否有 framer-motion 相关错误 | ❌ 已排除 |
 
 ## 证据收集
 
 ### 预插桩 (Pre-instrumentation)
 | 时间 | 操作 | 结果 |
 |------|------|------|
+| 2026-06-11 | 导航到 /exceptions 页面 | 页面空白，无内容渲染 |
+| 2026-06-11 | 检查浏览器控制台 | TypeError: Cannot read properties of undefined (reading 'id') at getMockData (store/index.ts:384:25) |
+
+### 假设验证
+
+| 编号 | 假设 | 状态 | 证据 |
+|------|------|------|------|
+| H3 | 路由配置错误导致组件未正确挂载 | ❌ 已排除 | 路由配置正确，组件被挂载但渲染前 store 初始化失败 |
+| H2 | `exceptions` 状态数组在初始加载时为 `undefined` | ❌ 已排除 | 不是 exceptions 本身 undefined，而是创建 mock 数据时 orders 索引越界 |
+| H4 | `transportException` 类型定义与 mock 数据不匹配 | ✅ 确认相关 | orders[4] 和 orders[3] 引用的索引在 getMockData() 中不存在 |
+| H1 | `ExceptionType` 类型与 `lucide-react` 图标类型不匹配 | ❌ 已排除 | store 初始化失败发生在组件渲染之前 |
+| H5 | `motion` 动画库的某个动画属性与 React 18 不兼容 | ❌ 已排除 | 问题发生在数据层，与动画无关 |
+
+**根因确认：** `getMockData()` 中 `orders` 数组只有 2 个元素，但异常数据引用了 `orders[4]` 和 `orders[3]`，导致索引越界访问 `undefined.id`，导致整个 store 初始化失败，React 无法渲染任何内容。
 
 ### 插桩日志 (Instrumentation Logs)
-| 时间 | 位置 | 事件 | 数据 |
-|------|------|------|------|
+无需额外插桩，已通过控制台错误直接定位。
 
 ## 修复记录
 
 | 时间 | 修复内容 | 验证结果 |
 |------|----------|----------|
+| 2026-06-11 | 将 getMockData() 中异常数据的 orders[4] 改为 orders[0]，orders[3] 改为 orders[0] | ✅ 解决了索引越界问题 |
+| 2026-06-11 | 添加数据迁移逻辑，确保从 localStorage 加载的旧数据也能正确初始化 exceptions 字段 | ✅ 解决了本地存储缓存的旧数据导致的问题 |
+
+## 进一步功能测试（2026-06-11）
+
+| 测试项 | 结果 |
+|--------|------|
+| 异常列表页面 | ✅ 正常显示，包含统计卡片、筛选标签、搜索框、异常表格 |
+| 异常登记页面 | ✅ 正常显示，所有表单字段正确渲染（关联订单、异常类型、严重程度、上报人、标题、描述、地点） |
+| 异常详情页面 | ✅ 正常显示，包含异常信息卡片、处理流程时间线、关联订单、当前状态卡片 |
+| 处理流程交互 | ✅ 点击"标记已解决"按钮，模态框正常弹出，显示状态变化、备注输入、处理结果输入 |
+| 状态筛选功能 | ✅ 点击不同状态标签（全部/已上报/处理中/已解决/已关闭）均可交互 |
+| 路由导航 | ✅ 侧边栏"异常处理"菜单高亮，所有子页面路由正确 |
+| 控制台错误 | ✅ 无任何 JavaScript 错误 |
+
+**修复后验证：**
+- 页面正常渲染，统计卡片显示正确数据（待处理: 1, 处理中: 1, 已解决: 2, 已关闭: 1, 紧急未处理: 0）
+- 控制台无 TypeError 错误
+- 表格中 5 条异常记录正常显示
+- 搜索框、筛选按钮、"登记异常" 按钮均可交互
+- 页面快照显示 37 个 refs，24 个交互元素
+- 异常详情页面处理流程时间线正常显示
+- "标记已解决"模态框正常弹出

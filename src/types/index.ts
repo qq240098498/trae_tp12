@@ -109,7 +109,7 @@ export interface OrderStatusLog {
 
 export type ExceptionType = 'vehicle' | 'pet' | 'weather' | 'traffic' | 'other';
 export type ExceptionSeverity = 'low' | 'medium' | 'high' | 'critical';
-export type ExceptionStatus = 'reported' | 'processing' | 'resolved' | 'closed';
+export type ExceptionStatus = 'reported' | 'processing' | 'resolved' | 'closed' | 'cancelled';
 
 export interface ExceptionProcessingLog {
   id: string;

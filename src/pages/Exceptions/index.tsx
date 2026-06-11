@@ -24,6 +24,7 @@ const statusTabs: { key: ExceptionStatus | 'all'; label: string }[] = [
   { key: 'processing', label: '处理中' },
   { key: 'resolved', label: '已解决' },
   { key: 'closed', label: '已关闭' },
+  { key: 'cancelled', label: '已撤销' },
 ];
 
 const typeIcons: Record<ExceptionType, typeof AlertTriangle> = {
@@ -78,8 +79,9 @@ export default function ExceptionsIndex() {
     const processing = exceptions.filter((e) => e.status === 'processing').length;
     const resolved = exceptions.filter((e) => e.status === 'resolved').length;
     const closed = exceptions.filter((e) => e.status === 'closed').length;
-    const critical = exceptions.filter((e) => e.severity === 'critical' && e.status !== 'closed' && e.status !== 'resolved').length;
-    return { reported, processing, resolved, closed, critical };
+    const cancelled = exceptions.filter((e) => e.status === 'cancelled').length;
+    const critical = exceptions.filter((e) => e.severity === 'critical' && e.status !== 'closed' && e.status !== 'resolved' && e.status !== 'cancelled').length;
+    return { reported, processing, resolved, closed, cancelled, critical };
   }, [exceptions]);
 
   const columns = [
@@ -170,7 +172,7 @@ export default function ExceptionsIndex() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -239,6 +241,22 @@ export default function ExceptionsIndex() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
+          className="bg-white rounded-2xl shadow-card border border-red-200 p-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-red-500">{summaryStats.cancelled}</p>
+              <p className="text-xs text-red-400">已撤销</p>
+            </div>
+          </div>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.25 }}
           className="bg-white rounded-2xl shadow-card border border-danger-200 p-4"
         >
           <div className="flex items-center gap-3">

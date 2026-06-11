@@ -13,6 +13,7 @@ import {
   Clock,
   Loader2,
   XCircle,
+  Ban,
   MapPin,
   User,
   FileText,
@@ -54,6 +55,7 @@ const statusIcons: Record<ExceptionStatus, typeof AlertTriangle> = {
   processing: Loader2,
   resolved: CheckCircle2,
   closed: XCircle,
+  cancelled: Ban,
 };
 
 const statusColors: Record<ExceptionStatus, string> = {
@@ -61,6 +63,7 @@ const statusColors: Record<ExceptionStatus, string> = {
   processing: 'text-warning-500 bg-warning-100',
   resolved: 'text-success-600 bg-success-100',
   closed: 'text-gray-500 bg-gray-100',
+  cancelled: 'text-red-500 bg-red-50',
 };
 
 const actionLabels: Record<ExceptionStatus, string> = {
@@ -68,6 +71,7 @@ const actionLabels: Record<ExceptionStatus, string> = {
   processing: '标记已解决',
   resolved: '关闭异常',
   closed: '',
+  cancelled: '',
 };
 
 const nextStatusMap: Partial<Record<ExceptionStatus, ExceptionStatus>> = {
@@ -76,13 +80,17 @@ const nextStatusMap: Partial<Record<ExceptionStatus, ExceptionStatus>> = {
   resolved: 'closed',
 };
 
+const canCancelStatuses: ExceptionStatus[] = ['reported', 'processing'];
+
 export default function ExceptionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { exceptions, orders, pets, employees, updateExceptionStatus, addExceptionProcessingLog } = useAppStore();
 
   const [showActionModal, setShowActionModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [actionRemark, setActionRemark] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
   const [resolution, setResolution] = useState('');
 
   const exception = exceptions.find((e) => e.id === id);
@@ -129,6 +137,21 @@ export default function ExceptionDetail() {
     setResolution('');
   };
 
+  const handleCancel = () => {
+    const reasonValue = cancelReason.trim() || '异常单撤销';
+
+    addExceptionProcessingLog(exception.id, {
+      action: '撤销异常',
+      operator: currentHandler,
+      remark: reasonValue,
+    });
+
+    updateExceptionStatus(exception.id, 'cancelled', currentHandler);
+
+    setShowCancelModal(false);
+    setCancelReason('');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -139,14 +162,26 @@ export default function ExceptionDetail() {
         >
           返回列表
         </Button>
-        {exception.status !== 'closed' && nextStatusMap[exception.status] && (
-          <Button
-            leftIcon={<CheckCircle2 className="w-4 h-4" />}
-            onClick={() => setShowActionModal(true)}
-          >
-            {actionLabels[exception.status]}
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          {canCancelStatuses.includes(exception.status) && (
+            <Button
+              variant="outline"
+              leftIcon={<Ban className="w-4 h-4" />}
+              onClick={() => setShowCancelModal(true)}
+              className="text-danger-600 border-danger-300 hover:bg-danger-50"
+            >
+              撤销异常
+            </Button>
+          )}
+          {exception.status !== 'closed' && exception.status !== 'cancelled' && nextStatusMap[exception.status] && (
+            <Button
+              leftIcon={<CheckCircle2 className="w-4 h-4" />}
+              onClick={() => setShowActionModal(true)}
+            >
+              {actionLabels[exception.status]}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -237,7 +272,9 @@ export default function ExceptionDetail() {
                         ? 'text-success-600 bg-success-100'
                         : log.action === '已关闭'
                           ? 'text-gray-500 bg-gray-100'
-                          : 'text-primary-500 bg-primary-100';
+                          : log.action === '撤销异常'
+                            ? 'text-red-500 bg-red-50'
+                            : 'text-primary-500 bg-primary-100';
 
                 return (
                   <motion.div
@@ -329,12 +366,22 @@ export default function ExceptionDetail() {
                   严重程度：{getExceptionSeverityText(exception.severity)}
                 </Badge>
               </div>
-              {exception.status !== 'closed' && nextStatusMap[exception.status] && (
+              {exception.status !== 'closed' && exception.status !== 'cancelled' && nextStatusMap[exception.status] && (
                 <Button
                   className="w-full"
                   onClick={() => setShowActionModal(true)}
                 >
                   {actionLabels[exception.status]}
+                </Button>
+              )}
+              {canCancelStatuses.includes(exception.status) && (
+                <Button
+                  variant="outline"
+                  className="w-full text-danger-600 border-danger-300 hover:bg-danger-50"
+                  leftIcon={<Ban className="w-4 h-4" />}
+                  onClick={() => setShowCancelModal(true)}
+                >
+                  撤销异常
                 </Button>
               )}
             </div>
@@ -402,6 +449,77 @@ export default function ExceptionDetail() {
               />
             </div>
           )}
+
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <User className="w-3.5 h-3.5" />
+            <span>操作人：{currentHandler}</span>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showCancelModal}
+        onClose={() => {
+          setShowCancelModal(false);
+          setCancelReason('');
+        }}
+        title="撤销异常"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCancelModal(false);
+                setCancelReason('');
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              variant="outline"
+              className="text-danger-600 border-danger-300 hover:bg-danger-50"
+              onClick={handleCancel}
+            >
+              确认撤销
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 rounded-xl p-3 border border-red-200">
+            <div className="flex items-center gap-2 mb-1">
+              <Ban className="w-4 h-4 text-danger-500" />
+              <span className="text-sm font-medium text-danger-600">撤销操作不可恢复</span>
+            </div>
+            <p className="text-xs text-danger-500">
+              撤销后异常单将标记为"已撤销"状态，无法继续处理流程。请确认是否要撤销此异常单。
+            </p>
+          </div>
+
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-sm text-gray-600">
+              当前状态：
+              <Badge variant={getExceptionStatusBadgeVariant(exception.status)} className="ml-2">
+                {getExceptionStatusText(exception.status)}
+              </Badge>
+              <span className="mx-2 text-gray-400">→</span>
+              <Badge variant={getExceptionStatusBadgeVariant('cancelled')} className="ml-2">
+                已撤销
+              </Badge>
+            </p>
+          </div>
+
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              撤销原因
+            </label>
+            <textarea
+              className="w-full min-h-[80px] px-4 py-3 text-sm rounded-xl border border-gray-200 bg-white text-gray-800 placeholder:text-gray-400 transition-all duration-200 focus:outline-none focus:border-danger-400 focus:ring-2 focus:ring-danger-100 hover:border-gray-300 resize-y"
+              placeholder="请输入撤销原因"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+            />
+          </div>
 
           <div className="flex items-center gap-2 text-xs text-gray-400">
             <User className="w-3.5 h-3.5" />
