@@ -173,6 +173,9 @@ export interface InsurancePolicy {
   expiry_date: string;
   has_claimed: boolean;
   total_claimed_amount: number;
+  surrender_date?: string;
+  surrender_reason?: string;
+  refund_amount?: number;
   created_at: string;
 }
 

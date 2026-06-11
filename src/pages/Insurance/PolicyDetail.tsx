@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -13,6 +13,9 @@ import {
   ChevronRight,
   Send,
   Clock,
+  XCircle,
+  Info,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAppStore } from '@/store';
 import {
@@ -26,11 +29,57 @@ import {
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+
+const surrenderReasonOptions = [
+  '计划变更，无需运输',
+  '运输服务取消',
+  '已选择其他保险公司',
+  '宠物健康问题，不适宜运输',
+  '其他原因',
+];
+
+function calculateRefundInfo(policy: {
+  status: string;
+  effective_date: string;
+  expiry_date: string;
+  premium_amount: number;
+}) {
+  const now = new Date();
+  const effectiveDate = new Date(policy.effective_date);
+  const expiryDate = new Date(policy.expiry_date);
+  let refundRate = 0;
+  let ruleDescription = '';
+  if (policy.status === 'pending') {
+    refundRate = 1.0;
+    ruleDescription = '保单待生效，支持全额退保';
+  } else if (now < effectiveDate) {
+    refundRate = 1.0;
+    ruleDescription = '保单尚未生效，支持全额退保';
+  } else {
+    const hoursElapsed = (now.getTime() - effectiveDate.getTime()) / (1000 * 60 * 60);
+    if (hoursElapsed <= 24) {
+      refundRate = 0.8;
+      ruleDescription = `生效${hoursElapsed.toFixed(1)}小时（24小时内），按保费80%退还`;
+    } else if (now < expiryDate) {
+      refundRate = 0.5;
+      ruleDescription = '保单已生效超过24小时且未过期，按保费50%退还';
+    } else {
+      return { refundRate: 0, refundAmount: 0, ruleDescription: '保单已过期，不可退保', canSurrender: false };
+    }
+  }
+  const refundAmount = Math.round(policy.premium_amount * refundRate * 100) / 100;
+  return { refundRate, refundAmount, ruleDescription, canSurrender: true };
+}
 
 export default function PolicyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { insurancePolicies, insuranceProducts, pets, customers, orders, insuranceClaims } = useAppStore();
+  const { insurancePolicies, insuranceProducts, pets, customers, orders, insuranceClaims, surrenderInsurancePolicy } = useAppStore();
+
+  const [surrenderModalOpen, setSurrenderModalOpen] = useState(false);
+  const [surrenderReason, setSurrenderReason] = useState('');
+  const [surrenderReasonText, setSurrenderReasonText] = useState('');
 
   const policy = insurancePolicies.find((p) => p.id === id);
   const product = insuranceProducts.find((p) => p.id === policy?.product_id);
@@ -38,6 +87,14 @@ export default function PolicyDetail() {
   const customer = customers.find((c) => c.id === policy?.customer_id);
   const order = orders.find((o) => o.id === policy?.order_id);
   const relatedClaims = insuranceClaims.filter((c) => c.policy_id === policy?.id);
+
+  const refundInfo = useMemo(() => {
+    if (!policy) return null;
+    return calculateRefundInfo(policy);
+  }, [policy]);
+
+  const canSurrender = policy && (policy.status === 'pending' || policy.status === 'active') && !policy.has_claimed
+    && !insuranceClaims.some((c) => c.policy_id === policy.id && (c.status === 'submitted' || c.status === 'reviewing'));
 
   if (!policy) {
     return (
@@ -92,12 +149,47 @@ export default function PolicyDetail() {
     },
   ];
 
+  if (policy.status === 'cancelled') {
+    infoItems.push(
+      {
+        label: '退保时间',
+        value: policy.surrender_date ? formatDate(policy.surrender_date) : '-',
+        icon: Clock,
+      },
+      {
+        label: '退保原因',
+        value: policy.surrender_reason || '-',
+        icon: Info,
+      },
+      {
+        label: '退还金额',
+        value: policy.refund_amount != null ? formatPrice(policy.refund_amount) : '-',
+        icon: CreditCard,
+      },
+    );
+  }
+
   const claimSteps = [
     { title: '提交申请', desc: '在线提交理赔申请及相关材料' },
     { title: '材料审核', desc: '保险公司审核理赔材料' },
     { title: '理赔调查', desc: '必要时进行事件调查核实' },
     { title: '赔付打款', desc: '审核通过后进行理赔支付' },
   ];
+
+  const handleSurrender = () => {
+    const finalReason = surrenderReason === '其他原因' ? surrenderReasonText.trim() : surrenderReason;
+    if (!finalReason) {
+      return;
+    }
+    const result = surrenderInsurancePolicy(policy.id, finalReason);
+    if (result.success) {
+      setSurrenderModalOpen(false);
+      setSurrenderReason('');
+      setSurrenderReasonText('');
+    } else {
+      alert(result.message);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -121,7 +213,12 @@ export default function PolicyDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card className="overflow-hidden">
-            <div className={`p-6 bg-gradient-to-r ${policy.status === 'active' ? 'from-primary-500 to-primary-600' : policy.status === 'expired' ? 'from-gray-400 to-gray-500' : 'from-amber-500 to-amber-600'}`}>
+            <div className={`p-6 bg-gradient-to-r ${
+              policy.status === 'active' ? 'from-primary-500 to-primary-600'
+                : policy.status === 'expired' ? 'from-gray-400 to-gray-500'
+                : policy.status === 'cancelled' ? 'from-danger-500 to-danger-600'
+                : 'from-amber-500 to-amber-600'
+            }`}>
               <div className="flex items-start justify-between text-white">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -130,7 +227,12 @@ export default function PolicyDetail() {
                   </div>
                   <p className="text-white/80 text-sm font-mono">{policy.policy_no}</p>
                 </div>
-                <Badge variant={policy.status === 'active' ? 'success' : policy.status === 'expired' ? 'default' : 'warning'}>
+                <Badge variant={
+                  policy.status === 'active' ? 'success'
+                    : policy.status === 'expired' ? 'default'
+                    : policy.status === 'cancelled' ? 'danger'
+                    : 'warning'
+                }>
                   {getInsuranceStatusText(policy.status)}
                 </Badge>
               </div>
@@ -148,6 +250,17 @@ export default function PolicyDetail() {
                   <p className="text-xl font-bold text-white">{formatPrice(policy.premium_amount)}</p>
                 </div>
               </div>
+              {policy.status === 'cancelled' && policy.refund_amount != null && (
+                <div className="mt-4 bg-white/20 backdrop-blur rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-white/90 text-sm flex items-center gap-1.5">
+                      <XCircle className="w-4 h-4" />
+                      已退保 · 退还保费
+                    </p>
+                    <p className="text-xl font-bold text-white">+{formatPrice(policy.refund_amount)}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -325,8 +438,124 @@ export default function PolicyDetail() {
               申请理赔
             </Button>
           )}
+
+          {canSurrender && (
+            <Button
+              size="lg"
+              variant="outline"
+              className="w-full text-danger-600 border-danger-200 hover:bg-danger-50 hover:border-danger-300"
+              leftIcon={<XCircle className="w-5 h-5" />}
+              onClick={() => setSurrenderModalOpen(true)}
+            >
+              申请退保
+            </Button>
+          )}
+
+          {!canSurrender && policy.status !== 'cancelled' && (policy.status === 'expired' || policy.has_claimed) && (
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-gray-500">
+                  {policy.status === 'expired'
+                    ? '保单已过期，无法退保'
+                    : policy.has_claimed
+                      ? '保单已发生理赔，无法退保'
+                      : '当前状态不支持退保'
+                  }
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      <Modal
+        isOpen={surrenderModalOpen}
+        onClose={() => setSurrenderModalOpen(false)}
+        title="申请退保"
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setSurrenderModalOpen(false)}>
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!surrenderReason || (surrenderReason === '其他原因' && !surrenderReasonText.trim())}
+              onClick={handleSurrender}
+            >
+              确认退保
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          {refundInfo && (
+            <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+              <div className="flex items-start gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">退保须知</p>
+                  <p className="text-xs text-amber-700 mt-0.5">{refundInfo.ruleDescription}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3 pt-3 border-t border-amber-200">
+                <div className="text-center">
+                  <p className="text-xs text-amber-700 mb-1">已缴保费</p>
+                  <p className="text-lg font-bold text-gray-800">{formatPrice(policy.premium_amount)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-amber-700 mb-1">退还比例</p>
+                  <p className="text-lg font-bold text-amber-600">{(refundInfo.refundRate * 100).toFixed(0)}%</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-amber-700 mb-1">预计退还</p>
+                  <p className="text-lg font-bold text-success-600">+{formatPrice(refundInfo.refundAmount)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">退保原因 <span className="text-danger-500">*</span></label>
+            <div className="space-y-2">
+              {surrenderReasonOptions.map((option) => (
+                <label
+                  key={option}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-all ${
+                    surrenderReason === option
+                      ? 'bg-primary-50 border-primary-200'
+                      : 'bg-gray-50 border-gray-100 hover:bg-gray-100'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="surrenderReason"
+                    value={option}
+                    checked={surrenderReason === option}
+                    onChange={(e) => setSurrenderReason(e.target.value)}
+                    className="w-4 h-4 text-primary-600"
+                  />
+                  <span className="text-sm text-gray-700">{option}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {surrenderReason === '其他原因' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">请说明具体原因 <span className="text-danger-500">*</span></label>
+              <textarea
+                value={surrenderReasonText}
+                onChange={(e) => setSurrenderReasonText(e.target.value)}
+                placeholder="请详细描述退保原因..."
+                rows={3}
+                className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 resize-none"
+              />
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

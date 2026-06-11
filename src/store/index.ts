@@ -82,6 +82,7 @@ interface AppState {
 
   addInsurancePolicy: (policy: Omit<InsurancePolicy, 'id' | 'policy_no' | 'created_at'>) => void;
   updateInsurancePolicyStatus: (id: string, status: InsuranceStatus) => void;
+  surrenderInsurancePolicy: (id: string, reason: string) => { success: boolean; message: string; refundAmount?: number };
 
   addInsuranceClaim: (claim: Omit<InsuranceClaim, 'id' | 'claim_no' | 'submitted_at' | 'processing_logs'>) => void;
   updateInsuranceClaimStatus: (id: string, status: ClaimStatus, reviewerName: string, approvedAmount?: number, resolution?: string) => void;
@@ -857,6 +858,72 @@ export const useAppStore = create<AppState>((set, get) => ({
       saveToStorage(newState);
       return newState;
     }),
+
+  surrenderInsurancePolicy: (id, reason) => {
+    let result: { success: boolean; message: string; refundAmount?: number } = { success: false, message: '', refundAmount: 0 };
+    set((state) => {
+      const policy = state.insurancePolicies.find((p) => p.id === id);
+      if (!policy) {
+        result = { success: false, message: '保单不存在', refundAmount: 0 };
+        return state;
+      }
+      if (policy.status !== 'pending' && policy.status !== 'active') {
+        result = { success: false, message: '只有待生效或保障中的保单才可退保', refundAmount: 0 };
+        return state;
+      }
+      if (policy.has_claimed) {
+        result = { success: false, message: '已发生理赔的保单不可退保', refundAmount: 0 };
+        return state;
+      }
+      if (policy.status === 'active') {
+        const hasPendingOrReviewing = state.insuranceClaims.some(
+          (c) => c.policy_id === id && (c.status === 'submitted' || c.status === 'reviewing'),
+        );
+        if (hasPendingOrReviewing) {
+          result = { success: false, message: '该保单存在待处理理赔申请，暂不可退保', refundAmount: 0 };
+          return state;
+        }
+      }
+      const now = new Date();
+      const effectiveDate = new Date(policy.effective_date);
+      const expiryDate = new Date(policy.expiry_date);
+      let refundRate = 0;
+      if (policy.status === 'pending') {
+        refundRate = 1.0;
+      } else if (now < effectiveDate) {
+        refundRate = 1.0;
+      } else {
+        const hoursElapsed = (now.getTime() - effectiveDate.getTime()) / (1000 * 60 * 60);
+        if (hoursElapsed <= 24) {
+          refundRate = 0.8;
+        } else if (now < expiryDate) {
+          refundRate = 0.5;
+        } else {
+          result = { success: false, message: '保单已过期，不可退保', refundAmount: 0 };
+          return state;
+        }
+      }
+      const refundAmount = Math.round(policy.premium_amount * refundRate * 100) / 100;
+      const newState = {
+        ...state,
+        insurancePolicies: state.insurancePolicies.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: 'cancelled' as InsuranceStatus,
+                surrender_date: now.toISOString(),
+                surrender_reason: reason,
+                refund_amount: refundAmount,
+              }
+            : p,
+        ),
+      };
+      saveToStorage(newState);
+      result = { success: true, message: '退保成功', refundAmount };
+      return newState;
+    });
+    return result;
+  },
 
   addInsuranceClaim: (claim) =>
     set((state) => {

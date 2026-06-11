@@ -16,6 +16,7 @@ import {
   AlertCircle,
   FileCheck,
   Send,
+  LogOut,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
@@ -93,6 +94,7 @@ export default function InsuranceIndex() {
     addInsuranceProduct,
     updateInsuranceProduct,
     deleteInsuranceProduct,
+    surrenderInsurancePolicy,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<TabType>('products');
@@ -217,6 +219,45 @@ export default function InsuranceIndex() {
   const handleDeleteProduct = (record: InsuranceProduct) => {
     if (window.confirm(`确定删除保险产品「${record.name}」吗？`)) {
       deleteInsuranceProduct(record.id);
+    }
+  };
+
+  const canSurrenderPolicy = (policy: InsurancePolicy) => {
+    if (policy.status !== 'pending' && policy.status !== 'active') return false;
+    if (policy.has_claimed) return false;
+    const hasPendingClaim = insuranceClaims.some(
+      (c) => c.policy_id === policy.id && (c.status === 'submitted' || c.status === 'reviewing'),
+    );
+    if (hasPendingClaim) return false;
+    return true;
+  };
+
+  const calculateQuickRefund = (policy: InsurancePolicy): string => {
+    const now = new Date();
+    const effectiveDate = new Date(policy.effective_date);
+    const expiryDate = new Date(policy.expiry_date);
+    if (policy.status === 'pending' || now < effectiveDate) {
+      return `全额退还 ${formatPrice(policy.premium_amount)}`;
+    }
+    const hoursElapsed = (now.getTime() - effectiveDate.getTime()) / (1000 * 60 * 60);
+    if (hoursElapsed <= 24) {
+      return `退还80% ${formatPrice(Math.round(policy.premium_amount * 0.8 * 100) / 100)}`;
+    }
+    if (now < expiryDate) {
+      return `退还50% ${formatPrice(Math.round(policy.premium_amount * 0.5 * 100) / 100)}`;
+    }
+    return '不可退保';
+  };
+
+  const handleSurrenderPolicy = (record: InsurancePolicy) => {
+    const refundInfo = calculateQuickRefund(record);
+    const reason = window.prompt(
+      `确定申请退保吗？\n保单编号：${record.policy_no}\n${refundInfo}\n\n请输入退保原因：`,
+    );
+    if (!reason) return;
+    const result = surrenderInsurancePolicy(record.id, reason);
+    if (!result.success) {
+      alert(result.message);
     }
   };
 
@@ -365,9 +406,9 @@ export default function InsuranceIndex() {
       key: 'actions',
       title: '操作',
       align: 'center' as const,
-      width: 120,
+      width: 200,
       render: (record: InsurancePolicy) => (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -376,6 +417,17 @@ export default function InsuranceIndex() {
           >
             详情
           </Button>
+          {canSurrenderPolicy(record) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<LogOut className="w-4 h-4" />}
+              onClick={() => handleSurrenderPolicy(record)}
+              className="text-danger-500 hover:text-danger-600"
+            >
+              退保
+            </Button>
+          )}
         </div>
       ),
     },
