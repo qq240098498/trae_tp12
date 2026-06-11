@@ -18,6 +18,14 @@ import type {
   ExceptionSeverity,
   ExceptionStatus,
   ExceptionProcessingLog,
+  InsuranceProduct,
+  InsurancePolicy,
+  InsuranceClaim,
+  InsuranceStatus,
+  ClaimStatus,
+  ClaimProcessingLog,
+  InsuranceType,
+  ClaimReason,
 } from '@/types';
 import { generateId, generateOrderNo } from '@/utils';
 
@@ -63,6 +71,21 @@ interface AppState {
   addException: (exception: Omit<TransportException, 'id' | 'exception_no' | 'reported_at' | 'processing_logs'>) => void;
   updateExceptionStatus: (id: string, status: ExceptionStatus, handlerName: string, resolution?: string) => void;
   addExceptionProcessingLog: (exceptionId: string, log: Omit<ExceptionProcessingLog, 'id' | 'exception_id' | 'created_at'>) => void;
+
+  insuranceProducts: InsuranceProduct[];
+  insurancePolicies: InsurancePolicy[];
+  insuranceClaims: InsuranceClaim[];
+
+  addInsuranceProduct: (product: Omit<InsuranceProduct, 'id' | 'created_at'>) => void;
+  updateInsuranceProduct: (id: string, product: Partial<InsuranceProduct>) => void;
+  deleteInsuranceProduct: (id: string) => void;
+
+  addInsurancePolicy: (policy: Omit<InsurancePolicy, 'id' | 'policy_no' | 'created_at'>) => void;
+  updateInsurancePolicyStatus: (id: string, status: InsuranceStatus) => void;
+
+  addInsuranceClaim: (claim: Omit<InsuranceClaim, 'id' | 'claim_no' | 'submitted_at' | 'processing_logs'>) => void;
+  updateInsuranceClaimStatus: (id: string, status: ClaimStatus, reviewerName: string, approvedAmount?: number, resolution?: string) => void;
+  addInsuranceClaimProcessingLog: (claimId: string, log: Omit<ClaimProcessingLog, 'id' | 'claim_id' | 'created_at'>) => void;
 }
 
 const STORAGE_KEY = 'pet_shipping_app_state';
@@ -78,6 +101,9 @@ type AppData = {
   orders: Order[];
   orderStatusLogs: OrderStatusLog[];
   exceptions: TransportException[];
+  insuranceProducts: InsuranceProduct[];
+  insurancePolicies: InsurancePolicy[];
+  insuranceClaims: InsuranceClaim[];
 };
 
 function getMockData(): AppData {
@@ -291,6 +317,126 @@ function getMockData(): AppData {
     },
   ];
 
+  const insuranceProducts: InsuranceProduct[] = [
+    {
+      id: generateId(),
+      name: '基础运输保障',
+      type: 'basic' as InsuranceType,
+      description: '基础宠物运输安全保障，覆盖常见意外风险',
+      coverage_rate: 0.8,
+      max_coverage: 5000,
+      premium_rate: 0.03,
+      min_premium: 30,
+      deductible: 200,
+      is_active: true,
+      coverage_items: ['运输途中意外伤害', '意外身故', '紧急医疗救治', '交通事故'],
+      exclusions: ['先天性疾病', '既往症', '自杀自残', '未按要求笼具运输'],
+      created_at: now,
+    },
+    {
+      id: generateId(),
+      name: '标准全面保障',
+      type: 'standard' as InsuranceType,
+      description: '全面的宠物运输保障，含医疗和第三方责任',
+      coverage_rate: 0.9,
+      max_coverage: 20000,
+      premium_rate: 0.05,
+      min_premium: 80,
+      deductible: 100,
+      is_active: true,
+      coverage_items: ['意外伤害', '意外身故', '医疗费用', '第三方责任', '笼具损坏赔偿', '延误赔偿'],
+      exclusions: ['先天性疾病', '既往症', '故意行为', '战争暴乱'],
+      created_at: now,
+    },
+    {
+      id: generateId(),
+      name: '尊享无忧保障',
+      type: 'premium' as InsuranceType,
+      description: '高端宠物运输全无忧保障，无免赔额，覆盖全面',
+      coverage_rate: 1.0,
+      max_coverage: 100000,
+      premium_rate: 0.08,
+      min_premium: 200,
+      deductible: 0,
+      is_active: true,
+      coverage_items: ['意外伤害全额赔付', '意外身故全额赔付', '全额医疗费用', '第三方责任', '笼具损坏', '延误赔偿', '精神损失', '找宠服务'],
+      exclusions: ['故意行为导致', '违法运输'],
+      created_at: now,
+    },
+  ];
+
+  const insurancePolicies: InsurancePolicy[] = [
+    {
+      id: generateId(),
+      policy_no: 'INS' + Date.now() + '001',
+      order_id: orders[0].id,
+      customer_id: customers[0].id,
+      pet_id: pets[0].id,
+      product_id: insuranceProducts[1].id,
+      pet_value: 8000,
+      premium_amount: 400,
+      coverage_amount: 7200,
+      status: 'active' as InsuranceStatus,
+      purchase_date: now,
+      effective_date: now,
+      expiry_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      has_claimed: false,
+      total_claimed_amount: 0,
+      created_at: now,
+    },
+    {
+      id: generateId(),
+      policy_no: 'INS' + Date.now() + '002',
+      order_id: orders[1].id,
+      customer_id: customers[1].id,
+      pet_id: pets[1].id,
+      product_id: insuranceProducts[0].id,
+      pet_value: 3000,
+      premium_amount: 90,
+      coverage_amount: 2400,
+      status: 'active' as InsuranceStatus,
+      purchase_date: now,
+      effective_date: now,
+      expiry_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      has_claimed: false,
+      total_claimed_amount: 0,
+      created_at: now,
+    },
+  ];
+
+  const insuranceClaims: InsuranceClaim[] = [
+    {
+      id: generateId(),
+      claim_no: 'CLM' + Date.now() + '001',
+      policy_id: insurancePolicies[0].id,
+      order_id: orders[0].id,
+      customer_id: customers[0].id,
+      pet_id: pets[0].id,
+      reason: 'injury' as ClaimReason,
+      title: '运输途中宠物腿部擦伤',
+      description: '宠物在运输过程中因急刹车导致腿部轻微擦伤，已送至宠物医院处理，花费医疗费用800元',
+      claimed_amount: 800,
+      approved_amount: 630,
+      status: 'approved' as ClaimStatus,
+      incident_date: '2025-06-10T08:30:00Z',
+      incident_location: '京沪高速天津段',
+      reporter_name: '张三',
+      reporter_phone: '13800138001',
+      submitted_at: '2025-06-10T12:00:00Z',
+      reviewer_name: '吴管理',
+      reviewed_at: '2025-06-10T15:00:00Z',
+      resolution: '经审核，属于保障范围，扣除免赔额100元后，按90%比例赔付630元',
+      payment_date: '2025-06-11T10:00:00Z',
+      evidence_urls: [],
+      processing_logs: [
+        { id: generateId(), claim_id: '', action: '提交理赔', operator: '张三', remark: '已提交理赔申请及医疗凭证', created_at: '2025-06-10T12:00:00Z' },
+        { id: generateId(), claim_id: '', action: '材料审核', operator: '吴管理', remark: '材料齐全，开始审核', created_at: '2025-06-10T13:00:00Z' },
+        { id: generateId(), claim_id: '', action: '审核通过', operator: '吴管理', remark: '同意赔付630元', created_at: '2025-06-10T15:00:00Z' },
+        { id: generateId(), claim_id: '', action: '赔付完成', operator: '系统', remark: '赔款已支付至客户账户', created_at: '2025-06-11T10:00:00Z' },
+      ],
+    },
+  ];
+
   return {
     pets,
     petProfiles,
@@ -302,6 +448,9 @@ function getMockData(): AppData {
     orders,
     orderStatusLogs,
     exceptions,
+    insuranceProducts,
+    insurancePolicies,
+    insuranceClaims,
   };
 }
 
@@ -330,6 +479,9 @@ function saveToStorage(state: AppState) {
       orders: state.orders,
       orderStatusLogs: state.orderStatusLogs,
       exceptions: state.exceptions,
+      insuranceProducts: state.insuranceProducts,
+      insurancePolicies: state.insurancePolicies,
+      insuranceClaims: state.insuranceClaims,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch {
@@ -640,6 +792,144 @@ export const useAppStore = create<AppState>((set, get) => ({
           e.id === exceptionId
             ? { ...e, processing_logs: [...e.processing_logs, newLog] }
             : e,
+        ),
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  addInsuranceProduct: (product) =>
+    set((state) => {
+      const newProduct: InsuranceProduct = {
+        ...product,
+        id: generateId(),
+        created_at: new Date().toISOString(),
+      };
+      const newState = { ...state, insuranceProducts: [...state.insuranceProducts, newProduct] };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  updateInsuranceProduct: (id, product) =>
+    set((state) => {
+      const newState = {
+        ...state,
+        insuranceProducts: state.insuranceProducts.map((p) =>
+          p.id === id ? { ...p, ...product } : p,
+        ),
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  deleteInsuranceProduct: (id) =>
+    set((state) => {
+      const newState = {
+        ...state,
+        insuranceProducts: state.insuranceProducts.filter((p) => p.id !== id),
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  addInsurancePolicy: (policy) =>
+    set((state) => {
+      const now = new Date().toISOString();
+      const newPolicy: InsurancePolicy = {
+        ...policy,
+        id: generateId(),
+        policy_no: 'INS' + Date.now(),
+        created_at: now,
+      };
+      const newState = { ...state, insurancePolicies: [...state.insurancePolicies, newPolicy] };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  updateInsurancePolicyStatus: (id, status) =>
+    set((state) => {
+      const newState = {
+        ...state,
+        insurancePolicies: state.insurancePolicies.map((p) =>
+          p.id === id ? { ...p, status } : p,
+        ),
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  addInsuranceClaim: (claim) =>
+    set((state) => {
+      const now = new Date().toISOString();
+      const newClaim: InsuranceClaim = {
+        ...claim,
+        id: generateId(),
+        claim_no: 'CLM' + Date.now(),
+        submitted_at: now,
+        processing_logs: [
+          {
+            id: generateId(),
+            claim_id: '',
+            action: '提交理赔',
+            operator: claim.reporter_name,
+            remark: '理赔申请已提交',
+            created_at: now,
+          },
+        ],
+      };
+      const newState = { ...state, insuranceClaims: [...state.insuranceClaims, newClaim] };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  updateInsuranceClaimStatus: (id, status, reviewerName, approvedAmount, resolution) =>
+    set((state) => {
+      const now = new Date().toISOString();
+      const newState = {
+        ...state,
+        insuranceClaims: state.insuranceClaims.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                status,
+                reviewer_name: reviewerName || c.reviewer_name,
+                reviewed_at: c.reviewed_at || now,
+                approved_amount: approvedAmount ?? c.approved_amount,
+                resolution: resolution || c.resolution,
+                payment_date: status === 'paid' ? now : c.payment_date,
+              }
+            : c,
+        ),
+        insurancePolicies: state.insurancePolicies.map((p) => {
+          const claim = state.insuranceClaims.find((c) => c.id === id);
+          if (claim && claim.policy_id === p.id && (status === 'approved' || status === 'paid')) {
+            return {
+              ...p,
+              has_claimed: true,
+              total_claimed_amount: p.total_claimed_amount + (approvedAmount ?? claim.claimed_amount),
+            };
+          }
+          return p;
+        }),
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  addInsuranceClaimProcessingLog: (claimId, log) =>
+    set((state) => {
+      const newLog: ClaimProcessingLog = {
+        ...log,
+        id: generateId(),
+        claim_id: claimId,
+        created_at: new Date().toISOString(),
+      };
+      const newState = {
+        ...state,
+        insuranceClaims: state.insuranceClaims.map((c) =>
+          c.id === claimId
+            ? { ...c, processing_logs: [...c.processing_logs, newLog] }
+            : c,
         ),
       };
       saveToStorage(newState);

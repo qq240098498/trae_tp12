@@ -7,6 +7,10 @@ import type {
   ExceptionType,
   ExceptionSeverity,
   ExceptionStatus,
+  InsuranceType,
+  InsuranceStatus,
+  ClaimStatus,
+  ClaimReason,
 } from '@/types';
 
 export function generateId(): string {
@@ -132,4 +136,90 @@ export function getExceptionStatusBadgeVariant(status: ExceptionStatus): 'succes
     cancelled: 'danger',
   };
   return map[status];
+}
+
+export function getInsuranceTypeText(type: InsuranceType): string {
+  const map: Record<InsuranceType, string> = {
+    basic: '基础版',
+    standard: '标准版',
+    premium: '尊享版',
+  };
+  return map[type];
+}
+
+export function getInsuranceTypeColor(type: InsuranceType): string {
+  const map: Record<InsuranceType, string> = {
+    basic: 'bg-gray-100 text-gray-700',
+    standard: 'bg-blue-100 text-blue-700',
+    premium: 'bg-gradient-to-r from-amber-100 to-orange-100 text-orange-700',
+  };
+  return map[type];
+}
+
+export function getInsuranceStatusText(status: InsuranceStatus): string {
+  const map: Record<InsuranceStatus, string> = {
+    pending: '待生效',
+    active: '保障中',
+    expired: '已过期',
+    cancelled: '已退保',
+  };
+  return map[status];
+}
+
+export function getInsuranceStatusBadgeVariant(status: InsuranceStatus): 'success' | 'warning' | 'danger' | 'info' | 'default' {
+  const map: Record<InsuranceStatus, 'success' | 'warning' | 'danger' | 'info' | 'default'> = {
+    pending: 'warning',
+    active: 'success',
+    expired: 'default',
+    cancelled: 'danger',
+  };
+  return map[status];
+}
+
+export function getClaimStatusText(status: ClaimStatus): string {
+  const map: Record<ClaimStatus, string> = {
+    submitted: '已提交',
+    reviewing: '审核中',
+    approved: '已通过',
+    rejected: '已拒绝',
+    paid: '已赔付',
+    closed: '已结案',
+  };
+  return map[status];
+}
+
+export function getClaimStatusBadgeVariant(status: ClaimStatus): 'success' | 'warning' | 'danger' | 'info' | 'default' {
+  const map: Record<ClaimStatus, 'success' | 'warning' | 'danger' | 'info' | 'default'> = {
+    submitted: 'info',
+    reviewing: 'warning',
+    approved: 'success',
+    rejected: 'danger',
+    paid: 'success',
+    closed: 'default',
+  };
+  return map[status];
+}
+
+export function getClaimReasonText(reason: ClaimReason): string {
+  const map: Record<ClaimReason, string> = {
+    injury: '意外伤害',
+    illness: '突发疾病',
+    death: '死亡理赔',
+    lost: '丢失走失',
+    damage: '笼具损坏',
+    other: '其他原因',
+  };
+  return map[reason];
+}
+
+export function getClaimReasonColor(reason: ClaimReason): string {
+  const map: Record<ClaimReason, string> = {
+    injury: 'bg-red-50 text-red-600',
+    illness: 'bg-orange-50 text-orange-600',
+    death: 'bg-gray-100 text-gray-700',
+    lost: 'bg-yellow-50 text-yellow-700',
+    damage: 'bg-blue-50 text-blue-600',
+    other: 'bg-purple-50 text-purple-600',
+  };
+  return map[reason];
 }

@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowLeft, PawPrint, Route, Car, User, Phone, Clock, FileText, CreditCard, CheckCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, PawPrint, Route, Car, User, Phone, Clock, FileText, CreditCard, CheckCircle, Shield, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
 import { calculatePrice, formatPrice } from '@/utils';
-import type { OrderStatus } from '@/types';
+import type { OrderStatus, InsuranceProduct } from '@/types';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
@@ -20,8 +20,10 @@ export default function OrderNew() {
     customers,
     employees,
     pricingRules,
+    insuranceProducts,
     addOrder,
     addOrderStatusLog,
+    addInsurancePolicy,
   } = useAppStore();
 
   const [petId, setPetId] = useState('');
@@ -33,8 +35,17 @@ export default function OrderNew() {
   const [remark, setRemark] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [hasInsurance, setHasInsurance] = useState(false);
+  const [selectedInsuranceProductId, setSelectedInsuranceProductId] = useState('');
+  const [petValue, setPetValue] = useState(5000);
+  const [showInsuranceDetail, setShowInsuranceDetail] = useState(false);
+
   const activeRoutes = useMemo(() => routes.filter((r) => r.is_active), [routes]);
   const availableVehicles = useMemo(() => vehicles.filter((v) => v.status === '空闲'), [vehicles]);
+  const activeInsuranceProducts = useMemo(
+    () => insuranceProducts.filter((p) => p.is_active),
+    [insuranceProducts],
+  );
 
   const petOptions = pets.map((p) => ({ label: `${p.name} (${p.species} - ${p.weight_kg}kg)`, value: p.id }));
   const routeOptions = activeRoutes.map((r) => ({
@@ -45,10 +56,17 @@ export default function OrderNew() {
     label: `${v.plate_number} - ${v.vehicle_type} (容量${v.capacity}) - ${v.driver_name}`,
     value: v.id,
   }));
+  const insuranceOptions = activeInsuranceProducts.map((p) => ({
+    label: `${p.name} (保障率${(p.coverage_rate * 100).toFixed(0)}%, 费率${(p.premium_rate * 100).toFixed(1)}%)`,
+    value: p.id,
+  }));
 
   const selectedPet = pets.find((p) => p.id === petId);
   const selectedRoute = activeRoutes.find((r) => r.id === routeId);
   const selectedVehicle = availableVehicles.find((v) => v.id === vehicleId);
+  const selectedInsuranceProduct: InsuranceProduct | undefined = activeInsuranceProducts.find(
+    (p) => p.id === selectedInsuranceProductId,
+  );
 
   const priceInfo = useMemo(() => {
     if (!selectedPet || !selectedRoute || !selectedVehicle) {
@@ -60,6 +78,19 @@ export default function OrderNew() {
     return { basePrice, surcharge, total };
   }, [selectedPet, selectedRoute, selectedVehicle, pricingRules]);
 
+  const insuranceInfo = useMemo(() => {
+    if (!hasInsurance || !selectedInsuranceProduct) {
+      return { premium: 0, coverage: 0 };
+    }
+    const rawPremium = petValue * selectedInsuranceProduct.premium_rate;
+    const premium = Math.max(rawPremium, selectedInsuranceProduct.min_premium);
+    const rawCoverage = petValue * selectedInsuranceProduct.coverage_rate;
+    const coverage = Math.min(rawCoverage, selectedInsuranceProduct.max_coverage);
+    return { premium, coverage };
+  }, [hasInsurance, selectedInsuranceProduct, petValue]);
+
+  const finalTotal = priceInfo.total + insuranceInfo.premium;
+
   useEffect(() => {
     if (selectedVehicle) {
       const employee = employees.find((e) => e.name === selectedVehicle.driver_name);
@@ -69,7 +100,8 @@ export default function OrderNew() {
     }
   }, [selectedVehicle, employees]);
 
-  const canSubmit = !!(petId && routeId && vehicleId && receiverName && receiverPhone && pickupTime);
+  const canSubmit = !!(petId && routeId && vehicleId && receiverName && receiverPhone && pickupTime
+    && (!hasInsurance || (hasInsurance && selectedInsuranceProductId && petValue > 0)));
 
   const handleSubmit = async () => {
     if (!canSubmit || !selectedPet || !selectedRoute || !selectedVehicle) return;
@@ -86,15 +118,15 @@ export default function OrderNew() {
       vehicle_id: vehicleId,
       employee_id: employee?.id || '',
       base_price: priceInfo.basePrice,
-      surcharge: priceInfo.surcharge,
-      total_price: priceInfo.total,
+      surcharge: priceInfo.surcharge + insuranceInfo.premium,
+      total_price: finalTotal,
       status: 'pending' as OrderStatus,
       pickup_time: pickupTime,
       delivery_time: '',
       receiver_name: receiverName,
       receiver_phone: receiverPhone,
       satisfaction: null,
-      remark,
+      remark: remark + (hasInsurance ? `\n[已投保：${selectedInsuranceProduct?.name}]` : ''),
     };
 
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -110,6 +142,29 @@ export default function OrderNew() {
           location: '系统',
           remark: '订单已创建，等待接单',
         });
+
+        if (hasInsurance && selectedInsuranceProduct && customer) {
+          const now = new Date();
+          const effectiveDate = new Date(pickupTime || now);
+          const expiryDate = new Date(effectiveDate);
+          expiryDate.setDate(expiryDate.getDate() + Math.ceil(selectedRoute.duration_hours / 24) + 3);
+
+          addInsurancePolicy({
+            order_id: lastOrder.id,
+            customer_id: customer.id,
+            pet_id: petId,
+            product_id: selectedInsuranceProduct.id,
+            pet_value: petValue,
+            premium_amount: insuranceInfo.premium,
+            coverage_amount: insuranceInfo.coverage,
+            status: 'active',
+            purchase_date: now.toISOString(),
+            effective_date: effectiveDate.toISOString(),
+            expiry_date: expiryDate.toISOString(),
+            has_claimed: false,
+            total_claimed_amount: 0,
+          });
+        }
       }
     }, 0);
 
@@ -219,6 +274,147 @@ export default function OrderNew() {
               </div>
             </div>
           </Card>
+
+          <Card title="运输保险" icon={<Shield className="w-5 h-5" />}>
+            <div className="space-y-5">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={hasInsurance}
+                  onChange={(e) => {
+                    setHasInsurance(e.target.checked);
+                    if (e.target.checked && activeInsuranceProducts.length > 0 && !selectedInsuranceProductId) {
+                      setSelectedInsuranceProductId(activeInsuranceProducts[0].id);
+                    }
+                  }}
+                  className="mt-1 w-5 h-5 rounded-lg border-2 border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer transition-colors"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-800 group-hover:text-primary-600 transition-colors">
+                      购买运输保险
+                    </span>
+                    <Badge variant="info">推荐</Badge>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    为您的宠物提供运输途中的全方位保障，意外无忧
+                  </p>
+                </div>
+              </label>
+
+              {hasInsurance && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-4 border-t border-gray-100 pt-4"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Select
+                      label="选择保险方案"
+                      placeholder="请选择保险产品"
+                      options={insuranceOptions}
+                      value={selectedInsuranceProductId}
+                      onChange={(e) => setSelectedInsuranceProductId(e.target.value)}
+                    />
+                    <Input
+                      label="宠物估价 (元)"
+                      type="number"
+                      placeholder="请输入宠物价值"
+                      value={petValue.toString()}
+                      onChange={(e) => setPetValue(Number(e.target.value) || 0)}
+                      min={0}
+                      step={100}
+                    />
+                  </div>
+
+                  {selectedInsuranceProduct && (
+                    <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl p-4 border border-primary-100">
+                      <button
+                        onClick={() => setShowInsuranceDetail(!showInsuranceDetail)}
+                        className="w-full flex items-center justify-between text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Info className="w-4 h-4 text-primary-500" />
+                          <span className="font-medium text-primary-700">
+                            {selectedInsuranceProduct.name} 方案详情
+                          </span>
+                        </div>
+                        {showInsuranceDetail ? (
+                          <ChevronUp className="w-4 h-4 text-primary-500" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-primary-500" />
+                        )}
+                      </button>
+                      <AnimatePresence>
+                        {showInsuranceDetail && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mt-3 space-y-3 overflow-hidden"
+                          >
+                            <p className="text-sm text-gray-600">{selectedInsuranceProduct.description}</p>
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                              <div className="bg-white/60 rounded-lg p-3">
+                                <p className="text-gray-500">保障比例</p>
+                                <p className="font-semibold text-gray-800">{(selectedInsuranceProduct.coverage_rate * 100).toFixed(0)}%</p>
+                              </div>
+                              <div className="bg-white/60 rounded-lg p-3">
+                                <p className="text-gray-500">最高保额</p>
+                                <p className="font-semibold text-gray-800">{formatPrice(selectedInsuranceProduct.max_coverage)}</p>
+                              </div>
+                              <div className="bg-white/60 rounded-lg p-3">
+                                <p className="text-gray-500">保险费率</p>
+                                <p className="font-semibold text-gray-800">{(selectedInsuranceProduct.premium_rate * 100).toFixed(1)}%</p>
+                              </div>
+                              <div className="bg-white/60 rounded-lg p-3">
+                                <p className="text-gray-500">免赔额</p>
+                                <p className="font-semibold text-gray-800">{formatPrice(selectedInsuranceProduct.deductible)}</p>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-1.5">保障范围：</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {selectedInsuranceProduct.coverage_items.map((item, idx) => (
+                                  <span key={idx} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                                    {item}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-1.5">免责条款：</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {selectedInsuranceProduct.exclusions.map((item, idx) => (
+                                  <span key={idx} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-full">
+                                    {item}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {insuranceInfo.coverage > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                      <div>
+                        <p className="text-sm text-gray-500">预计保障额度</p>
+                        <p className="text-xl font-bold text-primary-600">{formatPrice(insuranceInfo.coverage)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500">应付保费</p>
+                        <p className="text-xl font-bold text-gray-800">{formatPrice(insuranceInfo.premium)}</p>
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </div>
+          </Card>
         </div>
 
         <div className="space-y-6">
@@ -237,6 +433,12 @@ export default function OrderNew() {
                     <span>{selectedVehicle.plate_number} · {selectedVehicle.vehicle_type}</span>
                   </div>
                 )}
+                {hasInsurance && selectedInsuranceProduct && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Shield className="w-4 h-4 text-primary-500" />
+                    <span className="text-primary-600">{selectedInsuranceProduct.name}</span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-gray-100 pt-4 space-y-3">
@@ -248,18 +450,27 @@ export default function OrderNew() {
                   <span className="text-gray-500">附加费</span>
                   <span className="font-medium text-gray-800">{formatPrice(priceInfo.surcharge)}</span>
                 </div>
+                {hasInsurance && insuranceInfo.premium > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5" />
+                      运输保费
+                    </span>
+                    <span className="font-medium text-primary-600">{formatPrice(insuranceInfo.premium)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-gray-100 pt-4">
                 <div className="flex justify-between items-end">
                   <span className="text-gray-600 font-medium">合计</span>
                   <motion.span
-                    key={priceInfo.total}
+                    key={finalTotal}
                     initial={{ scale: 1.1 }}
                     animate={{ scale: 1 }}
                     className="text-2xl font-bold text-primary-600"
                   >
-                    {formatPrice(priceInfo.total)}
+                    {formatPrice(finalTotal)}
                   </motion.span>
                 </div>
               </div>

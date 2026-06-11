@@ -137,3 +137,79 @@ export interface TransportException {
   resolution: string;
   processing_logs: ExceptionProcessingLog[];
 }
+
+export type InsuranceType = 'basic' | 'standard' | 'premium';
+export type InsuranceStatus = 'pending' | 'active' | 'expired' | 'cancelled';
+
+export interface InsuranceProduct {
+  id: string;
+  name: string;
+  type: InsuranceType;
+  description: string;
+  coverage_rate: number;
+  max_coverage: number;
+  premium_rate: number;
+  min_premium: number;
+  deductible: number;
+  is_active: boolean;
+  coverage_items: string[];
+  exclusions: string[];
+  created_at: string;
+}
+
+export interface InsurancePolicy {
+  id: string;
+  policy_no: string;
+  order_id: string;
+  customer_id: string;
+  pet_id: string;
+  product_id: string;
+  pet_value: number;
+  premium_amount: number;
+  coverage_amount: number;
+  status: InsuranceStatus;
+  purchase_date: string;
+  effective_date: string;
+  expiry_date: string;
+  has_claimed: boolean;
+  total_claimed_amount: number;
+  created_at: string;
+}
+
+export type ClaimStatus = 'submitted' | 'reviewing' | 'approved' | 'rejected' | 'paid' | 'closed';
+export type ClaimReason = 'injury' | 'illness' | 'death' | 'lost' | 'damage' | 'other';
+
+export interface ClaimProcessingLog {
+  id: string;
+  claim_id: string;
+  action: string;
+  operator: string;
+  remark: string;
+  created_at: string;
+}
+
+export interface InsuranceClaim {
+  id: string;
+  claim_no: string;
+  policy_id: string;
+  order_id: string;
+  customer_id: string;
+  pet_id: string;
+  reason: ClaimReason;
+  title: string;
+  description: string;
+  claimed_amount: number;
+  approved_amount: number | null;
+  status: ClaimStatus;
+  incident_date: string;
+  incident_location: string;
+  reporter_name: string;
+  reporter_phone: string;
+  submitted_at: string;
+  reviewer_name: string;
+  reviewed_at: string;
+  resolution: string;
+  payment_date: string;
+  evidence_urls: string[];
+  processing_logs: ClaimProcessingLog[];
+}

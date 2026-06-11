@@ -18,6 +18,10 @@ import Employees from '@/pages/Employees';
 import Exceptions from '@/pages/Exceptions';
 import ExceptionNew from '@/pages/Exceptions/ExceptionNew';
 import ExceptionDetail from '@/pages/Exceptions/ExceptionDetail';
+import Insurance from '@/pages/Insurance';
+import PolicyDetail from '@/pages/Insurance/PolicyDetail';
+import ClaimNew from '@/pages/Insurance/ClaimNew';
+import ClaimDetail from '@/pages/Insurance/ClaimDetail';
 
 export default function App() {
   return (
@@ -42,6 +46,10 @@ export default function App() {
           <Route path="exceptions" element={<Exceptions />} />
           <Route path="exceptions/new" element={<ExceptionNew />} />
           <Route path="exceptions/:id" element={<ExceptionDetail />} />
+          <Route path="insurance" element={<Insurance />} />
+          <Route path="insurance/policies/:id" element={<PolicyDetail />} />
+          <Route path="insurance/claims/new" element={<ClaimNew />} />
+          <Route path="insurance/claims/:id" element={<ClaimDetail />} />
           <Route
             path="*"
             element={
