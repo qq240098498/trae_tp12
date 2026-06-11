@@ -230,7 +230,7 @@ function getMockData(): AppData {
     {
       id: generateId(),
       exception_no: 'EXC20250609001',
-      order_id: orders[4].id,
+      order_id: orders[0].id,
       type: 'pet' as ExceptionType,
       severity: 'medium' as ExceptionSeverity,
       status: 'closed' as ExceptionStatus,
@@ -271,7 +271,7 @@ function getMockData(): AppData {
     {
       id: generateId(),
       exception_no: 'EXC20250607001',
-      order_id: orders[3].id,
+      order_id: orders[0].id,
       type: 'vehicle' as ExceptionType,
       severity: 'low' as ExceptionSeverity,
       status: 'resolved' as ExceptionStatus,
@@ -337,7 +337,17 @@ function saveToStorage(state: AppState) {
   }
 }
 
-const initialData: AppData = loadFromStorage() || getMockData();
+const initialData: AppData = (() => {
+  const stored = loadFromStorage();
+  if (stored) {
+    const mockData = getMockData();
+    return {
+      ...stored,
+      exceptions: stored.exceptions ?? mockData.exceptions,
+    };
+  }
+  return getMockData();
+})();
 
 export const useAppStore = create<AppState>((set, get) => ({
   ...initialData,
