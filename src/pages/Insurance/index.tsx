@@ -17,6 +17,8 @@ import {
   FileCheck,
   Send,
   LogOut,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
@@ -31,6 +33,10 @@ import {
   getClaimStatusBadgeVariant,
   getClaimReasonText,
   getClaimReasonColor,
+  SURRENDER_REASON_OPTIONS,
+  calculateRefundInfo,
+  canSurrenderPolicy,
+  buildSurrenderReason,
 } from '@/utils';
 import type {
   InsuranceProduct,
@@ -103,6 +109,10 @@ export default function InsuranceIndex() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [productForm, setProductForm] = useState<ProductForm>(initialProductForm);
   const [productErrors, setProductErrors] = useState<Partial<Record<keyof ProductForm, string>>>({});
+  const [surrenderModalOpen, setSurrenderModalOpen] = useState(false);
+  const [surrenderPolicy, setSurrenderPolicy] = useState<InsurancePolicy | null>(null);
+  const [surrenderReason, setSurrenderReason] = useState('');
+  const [surrenderReasonText, setSurrenderReasonText] = useState('');
 
   const getPetName = (petId: string) => pets.find((p) => p.id === petId)?.name || '-';
   const getCustomerName = (customerId: string) => customers.find((c) => c.id === customerId)?.name || '-';
@@ -222,41 +232,29 @@ export default function InsuranceIndex() {
     }
   };
 
-  const canSurrenderPolicy = (policy: InsurancePolicy) => {
-    if (policy.status !== 'pending' && policy.status !== 'active') return false;
-    if (policy.has_claimed) return false;
-    const hasPendingClaim = insuranceClaims.some(
-      (c) => c.policy_id === policy.id && (c.status === 'submitted' || c.status === 'reviewing'),
-    );
-    if (hasPendingClaim) return false;
-    return true;
+  const surrenderRefundInfo = useMemo(() => {
+    if (!surrenderPolicy) return null;
+    return calculateRefundInfo(surrenderPolicy);
+  }, [surrenderPolicy]);
+
+  const handleOpenSurrenderModal = (record: InsurancePolicy) => {
+    setSurrenderPolicy(record);
+    setSurrenderReason('');
+    setSurrenderReasonText('');
+    setSurrenderModalOpen(true);
   };
 
-  const calculateQuickRefund = (policy: InsurancePolicy): string => {
-    const now = new Date();
-    const effectiveDate = new Date(policy.effective_date);
-    const expiryDate = new Date(policy.expiry_date);
-    if (policy.status === 'pending' || now < effectiveDate) {
-      return `全额退还 ${formatPrice(policy.premium_amount)}`;
-    }
-    const hoursElapsed = (now.getTime() - effectiveDate.getTime()) / (1000 * 60 * 60);
-    if (hoursElapsed <= 24) {
-      return `退还80% ${formatPrice(Math.round(policy.premium_amount * 0.8 * 100) / 100)}`;
-    }
-    if (now < expiryDate) {
-      return `退还50% ${formatPrice(Math.round(policy.premium_amount * 0.5 * 100) / 100)}`;
-    }
-    return '不可退保';
-  };
-
-  const handleSurrenderPolicy = (record: InsurancePolicy) => {
-    const refundInfo = calculateQuickRefund(record);
-    const reason = window.prompt(
-      `确定申请退保吗？\n保单编号：${record.policy_no}\n${refundInfo}\n\n请输入退保原因：`,
-    );
-    if (!reason) return;
-    const result = surrenderInsurancePolicy(record.id, reason);
-    if (!result.success) {
+  const handleSurrender = () => {
+    if (!surrenderPolicy) return;
+    const finalReason = buildSurrenderReason(surrenderReason, surrenderReasonText);
+    if (!finalReason) return;
+    const result = surrenderInsurancePolicy(surrenderPolicy.id, finalReason);
+    if (result.success) {
+      setSurrenderModalOpen(false);
+      setSurrenderPolicy(null);
+      setSurrenderReason('');
+      setSurrenderReasonText('');
+    } else {
       alert(result.message);
     }
   };
@@ -417,12 +415,12 @@ export default function InsuranceIndex() {
           >
             详情
           </Button>
-          {canSurrenderPolicy(record) && (
+          {canSurrenderPolicy(record, insuranceClaims) && (
             <Button
               variant="ghost"
               size="sm"
               leftIcon={<LogOut className="w-4 h-4" />}
-              onClick={() => handleSurrenderPolicy(record)}
+              onClick={() => handleOpenSurrenderModal(record)}
               className="text-danger-500 hover:text-danger-600"
             >
               退保
@@ -826,6 +824,116 @@ export default function InsuranceIndex() {
               className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 resize-none"
             />
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={surrenderModalOpen}
+        onClose={() => {
+          setSurrenderModalOpen(false);
+          setSurrenderPolicy(null);
+          setSurrenderReason('');
+          setSurrenderReasonText('');
+        }}
+        title="申请退保"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSurrenderModalOpen(false);
+                setSurrenderPolicy(null);
+                setSurrenderReason('');
+                setSurrenderReasonText('');
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!surrenderReason || (surrenderReason === '其他原因' && !surrenderReasonText.trim())}
+              onClick={handleSurrender}
+            >
+              确认退保
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          {surrenderPolicy && surrenderRefundInfo && (
+            <>
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">保单编号</span>
+                  <span className="font-mono text-gray-700">{surrenderPolicy.policy_no}</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                <div className="flex items-start gap-2 mb-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">退保须知</p>
+                    <p className="text-xs text-amber-700 mt-0.5">{surrenderRefundInfo.ruleDescription}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-amber-200">
+                  <div className="text-center">
+                    <p className="text-xs text-amber-700 mb-1">已缴保费</p>
+                    <p className="text-lg font-bold text-gray-800">{formatPrice(surrenderPolicy.premium_amount)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-amber-700 mb-1">退还比例</p>
+                    <p className="text-lg font-bold text-amber-600">{(surrenderRefundInfo.refundRate * 100).toFixed(0)}%</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-amber-700 mb-1">预计退还</p>
+                    <p className="text-lg font-bold text-success-600">+{formatPrice(surrenderRefundInfo.refundAmount)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">退保原因 <span className="text-danger-500">*</span></label>
+                <div className="space-y-2">
+                  {SURRENDER_REASON_OPTIONS.map((option) => (
+                    <label
+                      key={option}
+                      className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-all ${
+                        surrenderReason === option
+                          ? 'bg-primary-50 border-primary-200'
+                          : 'bg-gray-50 border-gray-100 hover:bg-gray-100'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="listSurrenderReason"
+                        value={option}
+                        checked={surrenderReason === option}
+                        onChange={(e) => setSurrenderReason(e.target.value)}
+                        className="w-4 h-4 text-primary-600"
+                      />
+                      <span className="text-sm text-gray-700">{option}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {surrenderReason === '其他原因' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">请说明具体原因 <span className="text-danger-500">*</span></label>
+                  <textarea
+                    value={surrenderReasonText}
+                    onChange={(e) => setSurrenderReasonText(e.target.value)}
+                    placeholder="请详细描述退保原因..."
+                    rows={3}
+                    className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 resize-none"
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Modal>
     </div>

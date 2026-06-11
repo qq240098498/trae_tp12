@@ -11,6 +11,8 @@ import type {
   InsuranceStatus,
   ClaimStatus,
   ClaimReason,
+  InsurancePolicy,
+  InsuranceClaim,
 } from '@/types';
 
 export function generateId(): string {
@@ -222,4 +224,75 @@ export function getClaimReasonColor(reason: ClaimReason): string {
     other: 'bg-purple-50 text-purple-600',
   };
   return map[reason];
+}
+
+export const SURRENDER_REASON_OPTIONS = [
+  '计划变更，无需运输',
+  '运输服务取消',
+  '已选择其他保险公司',
+  '宠物健康问题，不适宜运输',
+  '其他原因',
+] as const;
+
+export interface RefundInfo {
+  refundRate: number;
+  refundAmount: number;
+  ruleDescription: string;
+  canSurrender: boolean;
+}
+
+export function calculateRefundInfo(policy: {
+  status: string;
+  effective_date: string;
+  expiry_date: string;
+  premium_amount: number;
+}): RefundInfo {
+  const now = new Date();
+  const effectiveDate = new Date(policy.effective_date);
+  const expiryDate = new Date(policy.expiry_date);
+  let refundRate = 0;
+  let ruleDescription = '';
+
+  if (policy.status === 'pending') {
+    refundRate = 1.0;
+    ruleDescription = '保单待生效，支持全额退保';
+  } else if (now < effectiveDate) {
+    refundRate = 1.0;
+    ruleDescription = '保单尚未生效，支持全额退保';
+  } else {
+    const hoursElapsed = (now.getTime() - effectiveDate.getTime()) / (1000 * 60 * 60);
+    if (hoursElapsed <= 24) {
+      refundRate = 0.8;
+      ruleDescription = `生效${hoursElapsed.toFixed(1)}小时（24小时内），按保费80%退还`;
+    } else if (now < expiryDate) {
+      refundRate = 0.5;
+      ruleDescription = '保单已生效超过24小时且未过期，按保费50%退还';
+    } else {
+      return { refundRate: 0, refundAmount: 0, ruleDescription: '保单已过期，不可退保', canSurrender: false };
+    }
+  }
+
+  const refundAmount = Math.round(policy.premium_amount * refundRate * 100) / 100;
+  return { refundRate, refundAmount, ruleDescription, canSurrender: true };
+}
+
+export function canSurrenderPolicy(
+  policy: InsurancePolicy,
+  claims: InsuranceClaim[],
+): boolean {
+  if (policy.status !== 'pending' && policy.status !== 'active') return false;
+  if (policy.has_claimed) return false;
+  const hasPendingClaim = claims.some(
+    (c) => c.policy_id === policy.id && (c.status === 'submitted' || c.status === 'reviewing'),
+  );
+  if (hasPendingClaim) return false;
+  return true;
+}
+
+export function buildSurrenderReason(selectedReason: string, customText: string): string {
+  if (selectedReason === '其他原因') {
+    const text = customText.trim();
+    return text ? `其他原因：${text}` : '';
+  }
+  return selectedReason;
 }

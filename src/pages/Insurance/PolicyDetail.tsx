@@ -25,52 +25,15 @@ import {
   getInsuranceTypeColor,
   getInsuranceStatusText,
   getInsuranceStatusBadgeVariant,
+  SURRENDER_REASON_OPTIONS,
+  calculateRefundInfo,
+  canSurrenderPolicy,
+  buildSurrenderReason,
 } from '@/utils';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
-
-const surrenderReasonOptions = [
-  '计划变更，无需运输',
-  '运输服务取消',
-  '已选择其他保险公司',
-  '宠物健康问题，不适宜运输',
-  '其他原因',
-];
-
-function calculateRefundInfo(policy: {
-  status: string;
-  effective_date: string;
-  expiry_date: string;
-  premium_amount: number;
-}) {
-  const now = new Date();
-  const effectiveDate = new Date(policy.effective_date);
-  const expiryDate = new Date(policy.expiry_date);
-  let refundRate = 0;
-  let ruleDescription = '';
-  if (policy.status === 'pending') {
-    refundRate = 1.0;
-    ruleDescription = '保单待生效，支持全额退保';
-  } else if (now < effectiveDate) {
-    refundRate = 1.0;
-    ruleDescription = '保单尚未生效，支持全额退保';
-  } else {
-    const hoursElapsed = (now.getTime() - effectiveDate.getTime()) / (1000 * 60 * 60);
-    if (hoursElapsed <= 24) {
-      refundRate = 0.8;
-      ruleDescription = `生效${hoursElapsed.toFixed(1)}小时（24小时内），按保费80%退还`;
-    } else if (now < expiryDate) {
-      refundRate = 0.5;
-      ruleDescription = '保单已生效超过24小时且未过期，按保费50%退还';
-    } else {
-      return { refundRate: 0, refundAmount: 0, ruleDescription: '保单已过期，不可退保', canSurrender: false };
-    }
-  }
-  const refundAmount = Math.round(policy.premium_amount * refundRate * 100) / 100;
-  return { refundRate, refundAmount, ruleDescription, canSurrender: true };
-}
 
 export default function PolicyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -93,8 +56,7 @@ export default function PolicyDetail() {
     return calculateRefundInfo(policy);
   }, [policy]);
 
-  const canSurrender = policy && (policy.status === 'pending' || policy.status === 'active') && !policy.has_claimed
-    && !insuranceClaims.some((c) => c.policy_id === policy.id && (c.status === 'submitted' || c.status === 'reviewing'));
+  const canSurrender = policy ? canSurrenderPolicy(policy, insuranceClaims) : false;
 
   if (!policy) {
     return (
@@ -177,7 +139,7 @@ export default function PolicyDetail() {
   ];
 
   const handleSurrender = () => {
-    const finalReason = surrenderReason === '其他原因' ? surrenderReasonText.trim() : surrenderReason;
+    const finalReason = buildSurrenderReason(surrenderReason, surrenderReasonText);
     if (!finalReason) {
       return;
     }
@@ -471,12 +433,23 @@ export default function PolicyDetail() {
 
       <Modal
         isOpen={surrenderModalOpen}
-        onClose={() => setSurrenderModalOpen(false)}
+        onClose={() => {
+          setSurrenderModalOpen(false);
+          setSurrenderReason('');
+          setSurrenderReasonText('');
+        }}
         title="申请退保"
         size="md"
         footer={
           <>
-            <Button variant="outline" onClick={() => setSurrenderModalOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSurrenderModalOpen(false);
+                setSurrenderReason('');
+                setSurrenderReasonText('');
+              }}
+            >
               取消
             </Button>
             <Button
@@ -491,7 +464,15 @@ export default function PolicyDetail() {
       >
         <div className="space-y-5">
           {refundInfo && (
-            <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+            <>
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">保单编号</span>
+                  <span className="font-mono text-gray-700">{policy.policy_no}</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
               <div className="flex items-start gap-2 mb-3">
                 <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
                 <div>
@@ -514,12 +495,13 @@ export default function PolicyDetail() {
                 </div>
               </div>
             </div>
+            </>
           )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">退保原因 <span className="text-danger-500">*</span></label>
             <div className="space-y-2">
-              {surrenderReasonOptions.map((option) => (
+              {SURRENDER_REASON_OPTIONS.map((option) => (
                 <label
                   key={option}
                   className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-all ${
