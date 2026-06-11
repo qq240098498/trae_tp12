@@ -106,3 +106,34 @@ export interface OrderStatusLog {
   remark: string;
   created_at: string;
 }
+
+export type ExceptionType = 'vehicle' | 'pet' | 'weather' | 'traffic' | 'other';
+export type ExceptionSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type ExceptionStatus = 'reported' | 'processing' | 'resolved' | 'closed';
+
+export interface ExceptionProcessingLog {
+  id: string;
+  exception_id: string;
+  action: string;
+  operator: string;
+  remark: string;
+  created_at: string;
+}
+
+export interface TransportException {
+  id: string;
+  exception_no: string;
+  order_id: string;
+  type: ExceptionType;
+  severity: ExceptionSeverity;
+  status: ExceptionStatus;
+  title: string;
+  description: string;
+  location: string;
+  reporter_name: string;
+  reported_at: string;
+  handler_name: string;
+  handled_at: string;
+  resolution: string;
+  processing_logs: ExceptionProcessingLog[];
+}

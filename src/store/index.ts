@@ -13,6 +13,11 @@ import type {
   VehicleType,
   VehicleStatus,
   EmployeeRole,
+  TransportException,
+  ExceptionType,
+  ExceptionSeverity,
+  ExceptionStatus,
+  ExceptionProcessingLog,
 } from '@/types';
 import { generateId, generateOrderNo } from '@/utils';
 
@@ -26,6 +31,7 @@ interface AppState {
   pricingRules: PricingRule[];
   orders: Order[];
   orderStatusLogs: OrderStatusLog[];
+  exceptions: TransportException[];
 
   addCustomer: (customer: Omit<Customer, 'id'>) => Customer;
   addPet: (pet: Omit<Pet, 'id' | 'created_at'>) => void;
@@ -53,6 +59,10 @@ interface AppState {
   addOrder: (order: Omit<Order, 'id' | 'order_no' | 'created_at' | 'updated_at'>) => void;
   updateOrderStatus: (id: string, status: OrderStatus) => void;
   addOrderStatusLog: (log: Omit<OrderStatusLog, 'id' | 'created_at'>) => void;
+
+  addException: (exception: Omit<TransportException, 'id' | 'exception_no' | 'reported_at' | 'processing_logs'>) => void;
+  updateExceptionStatus: (id: string, status: ExceptionStatus, handlerName: string, resolution?: string) => void;
+  addExceptionProcessingLog: (exceptionId: string, log: Omit<ExceptionProcessingLog, 'id' | 'exception_id' | 'created_at'>) => void;
 }
 
 const STORAGE_KEY = 'pet_shipping_app_state';
@@ -67,6 +77,7 @@ type AppData = {
   pricingRules: PricingRule[];
   orders: Order[];
   orderStatusLogs: OrderStatusLog[];
+  exceptions: TransportException[];
 };
 
 function getMockData(): AppData {
@@ -173,6 +184,113 @@ function getMockData(): AppData {
     { id: generateId(), order_id: orders[0].id, status: 'in_transit' as OrderStatus, location: '京津高速', remark: '运输中', created_at: now },
   ];
 
+  const exceptions: TransportException[] = [
+    {
+      id: generateId(),
+      exception_no: 'EXC20250610001',
+      order_id: orders[0].id,
+      type: 'vehicle' as ExceptionType,
+      severity: 'high' as ExceptionSeverity,
+      status: 'processing' as ExceptionStatus,
+      title: '运输车辆发动机故障',
+      description: '车辆在高速公路行驶途中发动机出现异响，仪表盘显示发动机故障灯亮起，需要紧急停靠检查',
+      location: '京沪高速济南段K120处',
+      reporter_name: '陈师傅',
+      reported_at: '2025-06-10T14:30:00Z',
+      handler_name: '林调度',
+      handled_at: '2025-06-10T14:45:00Z',
+      resolution: '',
+      processing_logs: [
+        { id: generateId(), exception_id: '', action: '上报异常', operator: '陈师傅', remark: '车辆发动机故障，已停靠应急车道', created_at: '2025-06-10T14:30:00Z' },
+        { id: generateId(), exception_id: '', action: '受理处理', operator: '林调度', remark: '已安排拖车和备用车辆前往', created_at: '2025-06-10T14:45:00Z' },
+      ],
+    },
+    {
+      id: generateId(),
+      exception_no: 'EXC20250610002',
+      order_id: orders[0].id,
+      type: 'pet' as ExceptionType,
+      severity: 'critical' as ExceptionSeverity,
+      status: 'resolved' as ExceptionStatus,
+      title: '宠物出现呕吐症状',
+      description: '运输途中宠物出现持续呕吐，精神萎靡，怀疑晕车或食物中毒，需要立即处理',
+      location: '京沪高速徐州段',
+      reporter_name: '陈师傅',
+      reported_at: '2025-06-10T10:20:00Z',
+      handler_name: '林调度',
+      handled_at: '2025-06-10T10:30:00Z',
+      resolution: '已在最近服务区停靠，联系就近宠物医院就诊，经检查为晕车反应，已给予药物治疗，宠物状态恢复稳定',
+      processing_logs: [
+        { id: generateId(), exception_id: '', action: '上报异常', operator: '陈师傅', remark: '宠物持续呕吐，精神萎靡', created_at: '2025-06-10T10:20:00Z' },
+        { id: generateId(), exception_id: '', action: '受理处理', operator: '林调度', remark: '指示司机就近服务区停靠，联系宠物医院', created_at: '2025-06-10T10:30:00Z' },
+        { id: generateId(), exception_id: '', action: '处理中', operator: '陈师傅', remark: '已到达服务区，带宠物前往就近宠物医院', created_at: '2025-06-10T11:00:00Z' },
+        { id: generateId(), exception_id: '', action: '已解决', operator: '林调度', remark: '宠物经检查为晕车反应，已治疗恢复，继续运输', created_at: '2025-06-10T12:30:00Z' },
+      ],
+    },
+    {
+      id: generateId(),
+      exception_no: 'EXC20250609001',
+      order_id: orders[4].id,
+      type: 'pet' as ExceptionType,
+      severity: 'medium' as ExceptionSeverity,
+      status: 'closed' as ExceptionStatus,
+      title: '老年犬关节不适',
+      description: '运输途中老年犬出现站立困难，疑似关节炎发作，需要调整运输方式',
+      location: '京港澳高速郑州段',
+      reporter_name: '刘师傅',
+      reported_at: '2025-06-09T16:00:00Z',
+      handler_name: '林调度',
+      handled_at: '2025-06-09T16:15:00Z',
+      resolution: '已在服务区停靠给宠物服药，铺设了更柔软的垫子，后续运输每2小时停车检查一次',
+      processing_logs: [
+        { id: generateId(), exception_id: '', action: '上报异常', operator: '刘师傅', remark: '老年犬站立困难，疑似关节炎', created_at: '2025-06-09T16:00:00Z' },
+        { id: generateId(), exception_id: '', action: '受理处理', operator: '林调度', remark: '指示停车检查，给予关节药物', created_at: '2025-06-09T16:15:00Z' },
+        { id: generateId(), exception_id: '', action: '已解决', operator: '刘师傅', remark: '已服药，铺设软垫，宠物状态好转', created_at: '2025-06-09T17:00:00Z' },
+        { id: generateId(), exception_id: '', action: '已关闭', operator: '林调度', remark: '持续跟踪无异常，关闭', created_at: '2025-06-10T08:00:00Z' },
+      ],
+    },
+    {
+      id: generateId(),
+      exception_no: 'EXC20250608001',
+      order_id: orders[1].id,
+      type: 'weather' as ExceptionType,
+      severity: 'medium' as ExceptionSeverity,
+      status: 'reported' as ExceptionStatus,
+      title: '暴雨天气影响运输',
+      description: '目的地上海地区发布暴雨预警，可能影响运输安全和送达时间',
+      location: '上海方向',
+      reporter_name: '赵师傅',
+      reported_at: '2025-06-08T15:00:00Z',
+      handler_name: '',
+      handled_at: '',
+      resolution: '',
+      processing_logs: [
+        { id: generateId(), exception_id: '', action: '上报异常', operator: '赵师傅', remark: '上海暴雨预警，建议延迟出发', created_at: '2025-06-08T15:00:00Z' },
+      ],
+    },
+    {
+      id: generateId(),
+      exception_no: 'EXC20250607001',
+      order_id: orders[3].id,
+      type: 'vehicle' as ExceptionType,
+      severity: 'low' as ExceptionSeverity,
+      status: 'resolved' as ExceptionStatus,
+      title: '车辆空调制冷不足',
+      description: '运输车辆空调制冷效果不佳，车厢温度偏高，可能影响宠物舒适度',
+      location: '广深高速',
+      reporter_name: '孙师傅',
+      reported_at: '2025-06-07T11:00:00Z',
+      handler_name: '林调度',
+      handled_at: '2025-06-07T11:20:00Z',
+      resolution: '已开窗通风并降低车速减少热量，空调问题已安排回程检修',
+      processing_logs: [
+        { id: generateId(), exception_id: '', action: '上报异常', operator: '孙师傅', remark: '空调制冷不足，车厢温度偏高', created_at: '2025-06-07T11:00:00Z' },
+        { id: generateId(), exception_id: '', action: '受理处理', operator: '林调度', remark: '建议开窗通风，低速行驶', created_at: '2025-06-07T11:20:00Z' },
+        { id: generateId(), exception_id: '', action: '已解决', operator: '孙师傅', remark: '已开窗通风，温度恢复适宜', created_at: '2025-06-07T12:00:00Z' },
+      ],
+    },
+  ];
+
   return {
     pets,
     petProfiles,
@@ -183,6 +301,7 @@ function getMockData(): AppData {
     pricingRules,
     orders,
     orderStatusLogs,
+    exceptions,
   };
 }
 
@@ -210,6 +329,7 @@ function saveToStorage(state: AppState) {
       pricingRules: state.pricingRules,
       orders: state.orders,
       orderStatusLogs: state.orderStatusLogs,
+      exceptions: state.exceptions,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch {
@@ -446,6 +566,71 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newState = {
         ...state,
         orderStatusLogs: [...state.orderStatusLogs, newLog],
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  addException: (exception) =>
+    set((state) => {
+      const now = new Date().toISOString();
+      const newException: TransportException = {
+        ...exception,
+        id: generateId(),
+        exception_no: `EXC${Date.now()}`,
+        reported_at: now,
+        processing_logs: [
+          {
+            id: generateId(),
+            exception_id: '',
+            action: '上报异常',
+            operator: exception.reporter_name,
+            remark: '异常已上报',
+            created_at: now,
+          },
+        ],
+      };
+      const newState = { ...state, exceptions: [...state.exceptions, newException] };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  updateExceptionStatus: (id, status, handlerName, resolution) =>
+    set((state) => {
+      const now = new Date().toISOString();
+      const newState = {
+        ...state,
+        exceptions: state.exceptions.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                status,
+                handler_name: handlerName || e.handler_name,
+                handled_at: e.handled_at || now,
+                resolution: resolution || e.resolution,
+              }
+            : e,
+        ),
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  addExceptionProcessingLog: (exceptionId, log) =>
+    set((state) => {
+      const newLog: ExceptionProcessingLog = {
+        ...log,
+        id: generateId(),
+        exception_id: exceptionId,
+        created_at: new Date().toISOString(),
+      };
+      const newState = {
+        ...state,
+        exceptions: state.exceptions.map((e) =>
+          e.id === exceptionId
+            ? { ...e, processing_logs: [...e.processing_logs, newLog] }
+            : e,
+        ),
       };
       saveToStorage(newState);
       return newState;

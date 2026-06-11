@@ -15,6 +15,9 @@ import OrderNew from '@/pages/Orders/OrderNew';
 import OrderDetail from '@/pages/Orders/OrderDetail';
 import Dispatch from '@/pages/Dispatch';
 import Employees from '@/pages/Employees';
+import Exceptions from '@/pages/Exceptions';
+import ExceptionNew from '@/pages/Exceptions/ExceptionNew';
+import ExceptionDetail from '@/pages/Exceptions/ExceptionDetail';
 
 export default function App() {
   return (
@@ -36,6 +39,9 @@ export default function App() {
           <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="dispatch" element={<Dispatch />} />
           <Route path="employees" element={<Employees />} />
+          <Route path="exceptions" element={<Exceptions />} />
+          <Route path="exceptions/new" element={<ExceptionNew />} />
+          <Route path="exceptions/:id" element={<ExceptionDetail />} />
           <Route
             path="*"
             element={

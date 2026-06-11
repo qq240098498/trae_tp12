@@ -4,6 +4,9 @@ import type {
   Pet,
   PricingRule,
   OrderStatus,
+  ExceptionType,
+  ExceptionSeverity,
+  ExceptionStatus,
 } from '@/types';
 
 export function generateId(): string {
@@ -76,4 +79,55 @@ export function getStatusColor(status: OrderStatus): string {
     cancelled: 'bg-gray-100 text-gray-800 border-gray-200',
   };
   return colorMap[status];
+}
+
+export function getExceptionTypeText(type: ExceptionType): string {
+  const map: Record<ExceptionType, string> = {
+    vehicle: '车辆故障',
+    pet: '宠物异常',
+    weather: '天气影响',
+    traffic: '交通问题',
+    other: '其他',
+  };
+  return map[type];
+}
+
+export function getExceptionSeverityText(severity: ExceptionSeverity): string {
+  const map: Record<ExceptionSeverity, string> = {
+    low: '低',
+    medium: '中',
+    high: '高',
+    critical: '紧急',
+  };
+  return map[severity];
+}
+
+export function getExceptionStatusText(status: ExceptionStatus): string {
+  const map: Record<ExceptionStatus, string> = {
+    reported: '已上报',
+    processing: '处理中',
+    resolved: '已解决',
+    closed: '已关闭',
+  };
+  return map[status];
+}
+
+export function getExceptionSeverityBadgeVariant(severity: ExceptionSeverity): 'success' | 'warning' | 'danger' | 'info' | 'default' {
+  const map: Record<ExceptionSeverity, 'success' | 'warning' | 'danger' | 'info' | 'default'> = {
+    low: 'default',
+    medium: 'info',
+    high: 'warning',
+    critical: 'danger',
+  };
+  return map[severity];
+}
+
+export function getExceptionStatusBadgeVariant(status: ExceptionStatus): 'success' | 'warning' | 'danger' | 'info' | 'default' {
+  const map: Record<ExceptionStatus, 'success' | 'warning' | 'danger' | 'info' | 'default'> = {
+    reported: 'danger',
+    processing: 'warning',
+    resolved: 'success',
+    closed: 'default',
+  };
+  return map[status];
 }
