@@ -72,6 +72,7 @@ export default function TrackingIndex() {
   const [selectedPetStatus, setSelectedPetStatus] = useState<string | null>(null);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [showMapOrderId, setShowMapOrderId] = useState<string | null>(null);
+  const [duplicateError, setDuplicateError] = useState('');
 
   const inTransitOrders = useMemo(
     () =>
@@ -117,22 +118,41 @@ export default function TrackingIndex() {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
   };
 
-  const openReportModal = (orderId: string) => {
-    setCurrentOrderId(orderId);
+  const clearReportForm = () => {
     setLocation('');
     setLocationRemark('');
     setSelectedPetStatus(null);
+    setDuplicateError('');
+  };
+
+  const openReportModal = (orderId: string) => {
+    setCurrentOrderId(orderId);
+    clearReportForm();
     setReportModalOpen(true);
+  };
+
+  const closeReportModal = () => {
+    clearReportForm();
+    setReportModalOpen(false);
+    setCurrentOrderId(null);
   };
 
   const appendQuickLocation = (quickLoc: string) => {
     if (location.includes(quickLoc)) return;
+    setDuplicateError('');
     setLocation((prev) => (prev ? `${prev} ${quickLoc}` : quickLoc));
   };
 
   const handleReportLocation = () => {
     if (!currentOrderId || !location.trim()) return;
     const trimmedLocation = location.trim();
+
+    const currentLoc = getCurrentLocation(currentOrderId);
+    if (currentLoc && currentLoc.location === trimmedLocation) {
+      setDuplicateError('当前位置与上次上报位置相同，请输入新的位置');
+      return;
+    }
+
     const trimmedRemark = locationRemark.trim();
     const petStatusText = selectedPetStatus ? `宠物${selectedPetStatus}` : '';
     const finalRemark = [trimmedRemark, petStatusText].filter(Boolean).join('，') || '位置上报';
@@ -156,11 +176,7 @@ export default function TrackingIndex() {
       reported_by: employee?.name || vehicle?.driver_name || '司机',
     });
 
-    setReportModalOpen(false);
-    setCurrentOrderId(null);
-    setLocation('');
-    setLocationRemark('');
-    setSelectedPetStatus(null);
+    closeReportModal();
 
     setShowSuccessAnimation(true);
     setTimeout(() => setShowSuccessAnimation(false), 2500);
@@ -514,17 +530,17 @@ export default function TrackingIndex() {
 
       <Modal
         isOpen={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
+        onClose={closeReportModal}
         title="上报位置"
         footer={
           <div className="flex justify-end gap-3">
-            <Button variant="ghost" onClick={() => setReportModalOpen(false)}>
+            <Button variant="ghost" onClick={closeReportModal}>
               取消
             </Button>
             <Button
               variant="primary"
               onClick={handleReportLocation}
-              disabled={!location.trim()}
+              disabled={!location.trim() || !!duplicateError}
               leftIcon={<Send className="w-4 h-4" />}
             >
               确认上报
@@ -563,8 +579,12 @@ export default function TrackingIndex() {
               placeholder="请输入当前所在位置，如：京津高速服务区"
               leftIcon={<MapPin className="w-4 h-4" />}
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={(e) => {
+                setDuplicateError('');
+                setLocation(e.target.value);
+              }}
               autoFocus
+              error={duplicateError}
             />
           </div>
 
