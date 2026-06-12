@@ -26,6 +26,7 @@ import type {
   ClaimProcessingLog,
   InsuranceType,
   ClaimReason,
+  TransportLocation,
 } from '@/types';
 import { generateId, generateOrderNo } from '@/utils';
 
@@ -39,6 +40,7 @@ interface AppState {
   pricingRules: PricingRule[];
   orders: Order[];
   orderStatusLogs: OrderStatusLog[];
+  transportLocations: TransportLocation[];
   exceptions: TransportException[];
 
   addCustomer: (customer: Omit<Customer, 'id'>) => Customer;
@@ -67,6 +69,8 @@ interface AppState {
   addOrder: (order: Omit<Order, 'id' | 'order_no' | 'created_at' | 'updated_at'>) => void;
   updateOrderStatus: (id: string, status: OrderStatus) => void;
   addOrderStatusLog: (log: Omit<OrderStatusLog, 'id' | 'created_at'>) => void;
+
+  addTransportLocation: (location: Omit<TransportLocation, 'id' | 'reported_at'>) => void;
 
   addException: (exception: Omit<TransportException, 'id' | 'exception_no' | 'reported_at' | 'processing_logs'>) => void;
   updateExceptionStatus: (id: string, status: ExceptionStatus, handlerName: string, resolution?: string) => void;
@@ -101,6 +105,7 @@ type AppData = {
   pricingRules: PricingRule[];
   orders: Order[];
   orderStatusLogs: OrderStatusLog[];
+  transportLocations: TransportLocation[];
   exceptions: TransportException[];
   insuranceProducts: InsuranceProduct[];
   insurancePolicies: InsurancePolicy[];
@@ -209,6 +214,86 @@ function getMockData(): AppData {
     { id: generateId(), order_id: orders[0].id, status: 'accepted' as OrderStatus, location: '北京仓库', remark: '员工已接单', created_at: now },
     { id: generateId(), order_id: orders[0].id, status: 'picked_up' as OrderStatus, location: '客户地址', remark: '已接宠', created_at: now },
     { id: generateId(), order_id: orders[0].id, status: 'in_transit' as OrderStatus, location: '京津高速', remark: '运输中', created_at: now },
+  ];
+
+  const transportLocations: TransportLocation[] = [
+    {
+      id: generateId(),
+      order_id: orders[0].id,
+      location: '北京市朝阳区',
+      latitude: 39.9042,
+      longitude: 116.4074,
+      address: '北京市朝阳区建国路88号',
+      remark: '已成功接取宠物，状态良好',
+      reported_by: '陈师傅',
+      reported_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: generateId(),
+      order_id: orders[0].id,
+      location: '京津高速入口',
+      latitude: 39.8500,
+      longitude: 116.5000,
+      address: '京津高速北京段入口',
+      remark: '已进入京津高速，正常行驶',
+      reported_by: '陈师傅',
+      reported_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: generateId(),
+      order_id: orders[0].id,
+      location: '天津市武清区',
+      latitude: 39.3800,
+      longitude: 117.0500,
+      address: '天津市武清区京津高速服务区',
+      remark: '停靠服务区休息，检查宠物状态',
+      reported_by: '陈师傅',
+      reported_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: generateId(),
+      order_id: orders[0].id,
+      location: '天津市西青区',
+      latitude: 39.1400,
+      longitude: 117.1700,
+      address: '天津市西青区杨柳青镇',
+      remark: '继续运输中，预计2小时后到达',
+      reported_by: '陈师傅',
+      reported_at: new Date(Date.now() - 1.5 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: generateId(),
+      order_id: orders[0].id,
+      location: '天津市南开区',
+      latitude: 39.1300,
+      longitude: 117.1600,
+      address: '天津市南开区黄河道',
+      remark: '即将到达目的地',
+      reported_by: '陈师傅',
+      reported_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    },
+    {
+      id: generateId(),
+      order_id: orders[4].id,
+      location: '广州市天河区',
+      latitude: 23.1291,
+      longitude: 113.2644,
+      address: '广州市天河区体育西路',
+      remark: '已成功接取宠物，老年犬状态稳定',
+      reported_by: '刘师傅',
+      reported_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: generateId(),
+      order_id: orders[4].id,
+      location: '广州市白云区',
+      latitude: 23.1800,
+      longitude: 113.2700,
+      address: '广州市白云区机场高速入口',
+      remark: '已进入机场高速，平稳驾驶中',
+      reported_by: '刘师傅',
+      reported_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    },
   ];
 
   const exceptions: TransportException[] = [
@@ -448,6 +533,7 @@ function getMockData(): AppData {
     pricingRules,
     orders,
     orderStatusLogs,
+    transportLocations,
     exceptions,
     insuranceProducts,
     insurancePolicies,
@@ -479,6 +565,7 @@ function saveToStorage(state: AppState) {
       pricingRules: state.pricingRules,
       orders: state.orders,
       orderStatusLogs: state.orderStatusLogs,
+      transportLocations: state.transportLocations,
       exceptions: state.exceptions,
       insuranceProducts: state.insuranceProducts,
       insurancePolicies: state.insurancePolicies,
@@ -497,6 +584,7 @@ const initialData: AppData = (() => {
     return {
       ...stored,
       exceptions: stored.exceptions ?? mockData.exceptions,
+      transportLocations: stored.transportLocations ?? mockData.transportLocations,
     };
   }
   return getMockData();
@@ -729,6 +817,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newState = {
         ...state,
         orderStatusLogs: [...state.orderStatusLogs, newLog],
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  addTransportLocation: (location) =>
+    set((state) => {
+      const newLocation: TransportLocation = {
+        ...location,
+        id: generateId(),
+        reported_at: new Date().toISOString(),
+      };
+      const newState = {
+        ...state,
+        transportLocations: [...state.transportLocations, newLocation],
       };
       saveToStorage(newState);
       return newState;

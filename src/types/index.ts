@@ -107,6 +107,20 @@ export interface OrderStatusLog {
   created_at: string;
 }
 
+export interface TransportLocation {
+  id: string;
+  order_id: string;
+  location: string;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+  remark?: string;
+  reported_by: string;
+  reported_at: string;
+}
+
+export type TransportStatus = 'idle' | 'waiting' | 'loading' | 'in_transit' | 'stopped' | 'unloading' | 'completed';
+
 export type ExceptionType = 'vehicle' | 'pet' | 'weather' | 'traffic' | 'other';
 export type ExceptionSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type ExceptionStatus = 'reported' | 'processing' | 'resolved' | 'closed' | 'cancelled';

@@ -12,6 +12,7 @@ import {
   ChevronRight,
   AlertTriangle,
   Shield,
+  Navigation,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { label: '车辆管理', path: '/vehicles', icon: Truck },
   { label: '订单中心', path: '/orders', icon: ShoppingCart },
   { label: '运输调度', path: '/dispatch', icon: CalendarClock },
+  { label: '实时轨迹', path: '/tracking', icon: Navigation },
   { label: '保险管理', path: '/insurance', icon: Shield },
   { label: '异常处理', path: '/exceptions', icon: AlertTriangle },
   { label: '员工管理', path: '/employees', icon: Users },

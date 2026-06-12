@@ -54,6 +54,7 @@ export default function DispatchIndex() {
     employees,
     updateOrderStatus,
     addOrderStatusLog,
+    addTransportLocation,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<DispatchTab>('pending');
@@ -123,14 +124,32 @@ export default function DispatchIndex() {
 
   const handleReportLocation = () => {
     if (!currentOrderId || !location.trim()) return;
+    const trimmedLocation = location.trim();
+    const trimmedRemark = locationRemark.trim();
+    
     addOrderStatusLog({
       order_id: currentOrderId,
       status: 'in_transit',
-      location: location.trim(),
-      remark: locationRemark.trim() || '位置上报',
+      location: trimmedLocation,
+      remark: trimmedRemark || '位置上报',
     });
+    
+    const order = orders.find((o) => o.id === currentOrderId);
+    const vehicle = order ? vehicles.find((v) => v.id === order.vehicle_id) : null;
+    const employee = order ? employees.find((e) => e.id === order.employee_id) : null;
+    
+    addTransportLocation({
+      order_id: currentOrderId,
+      location: trimmedLocation,
+      address: trimmedLocation,
+      remark: trimmedRemark || '位置上报',
+      reported_by: employee?.name || vehicle?.driver_name || '司机',
+    });
+    
     setLocationModalOpen(false);
     setCurrentOrderId(null);
+    setLocation('');
+    setLocationRemark('');
   };
 
   const renderOrderCard = (order: Order) => {

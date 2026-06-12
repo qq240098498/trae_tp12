@@ -16,6 +16,7 @@ import {
   XCircle,
   Info,
   AlertTriangle,
+  MapPin,
 } from 'lucide-react';
 import { useAppStore } from '@/store';
 import {
@@ -34,11 +35,12 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
+import TransportTimeline from '@/components/TransportTimeline';
 
 export default function PolicyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { insurancePolicies, insuranceProducts, pets, customers, orders, insuranceClaims, surrenderInsurancePolicy } = useAppStore();
+  const { insurancePolicies, insuranceProducts, pets, customers, orders, insuranceClaims, surrenderInsurancePolicy, transportLocations, routes } = useAppStore();
 
   const [surrenderModalOpen, setSurrenderModalOpen] = useState(false);
   const [surrenderReason, setSurrenderReason] = useState('');
@@ -49,6 +51,7 @@ export default function PolicyDetail() {
   const pet = pets.find((p) => p.id === policy?.pet_id);
   const customer = customers.find((c) => c.id === policy?.customer_id);
   const order = orders.find((o) => o.id === policy?.order_id);
+  const route = routes.find((r) => r.id === order?.route_id);
   const relatedClaims = insuranceClaims.filter((c) => c.policy_id === policy?.id);
 
   const refundInfo = useMemo(() => {
@@ -399,6 +402,31 @@ export default function PolicyDetail() {
             >
               申请理赔
             </Button>
+          )}
+
+          {order && (
+            <div
+              onClick={() => navigate(`/orders/${order.id}`)}
+              className="p-4 bg-primary-50 rounded-xl border border-primary-100 cursor-pointer hover:bg-primary-100 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-primary-600" />
+                  <span className="text-sm font-medium text-primary-800">查看运输轨迹</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-primary-400" />
+              </div>
+              <p className="text-xs text-primary-600 mt-1">订单号：{order.order_no}</p>
+            </div>
+          )}
+
+          {order && (
+            <TransportTimeline
+              orderId={order.id}
+              locations={transportLocations}
+              order={order}
+              route={route}
+            />
           )}
 
           {canSurrender && (

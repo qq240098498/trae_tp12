@@ -14,6 +14,7 @@ import Orders from '@/pages/Orders';
 import OrderNew from '@/pages/Orders/OrderNew';
 import OrderDetail from '@/pages/Orders/OrderDetail';
 import Dispatch from '@/pages/Dispatch';
+import Tracking from '@/pages/Tracking';
 import Employees from '@/pages/Employees';
 import Exceptions from '@/pages/Exceptions';
 import ExceptionNew from '@/pages/Exceptions/ExceptionNew';

@@ -38,6 +38,19 @@ export function formatDate(date: string | Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+export function formatDuration(hours: number): string {
+  if (hours < 1) {
+    const minutes = Math.round(hours * 60);
+    return `${minutes}分钟`;
+  }
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  if (minutes === 0) {
+    return `${wholeHours}小时`;
+  }
+  return `${wholeHours}小时${minutes}分钟`;
+}
+
 export function calculatePrice(
   route: Route,
   vehicle: Vehicle,

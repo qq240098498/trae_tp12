@@ -11,6 +11,7 @@ import {
   MapPin,
   CheckCircle2,
   Star,
+  Navigation,
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
@@ -25,6 +26,7 @@ import StatusTimeline, {
   OrderStatus as TimelineOrderStatus,
   StatusLog,
 } from '@/components/StatusTimeline';
+import TransportTimeline from '@/components/TransportTimeline';
 
 function mapStatusToTimeline(status: AppOrderStatus): TimelineOrderStatus {
   const map: Record<AppOrderStatus, TimelineOrderStatus> = {
@@ -64,8 +66,10 @@ export default function OrderDetail() {
     employees,
     customers,
     orderStatusLogs,
+    transportLocations,
     updateOrderStatus,
     addOrderStatusLog,
+    addTransportLocation,
   } = useAppStore();
 
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -113,12 +117,25 @@ export default function OrderDetail() {
 
   const handleReportLocation = () => {
     if (!location.trim()) return;
+    const trimmedLocation = location.trim();
+    const trimmedRemark = locationRemark.trim();
+    
     addOrderStatusLog({
       order_id: order.id,
       status: order.status,
-      location: location.trim(),
-      remark: locationRemark.trim() || '位置上报',
+      location: trimmedLocation,
+      remark: trimmedRemark || '位置上报',
     });
+    
+    const currentEmployee = employees.find((e) => e.id === order.employee_id);
+    addTransportLocation({
+      order_id: order.id,
+      location: trimmedLocation,
+      address: trimmedLocation,
+      remark: trimmedRemark || '位置上报',
+      reported_by: currentEmployee?.name || vehicle?.driver_name || '司机',
+    });
+    
     setLocation('');
     setLocationRemark('');
     setLocationModalOpen(false);
@@ -392,6 +409,14 @@ export default function OrderDetail() {
               </div>
             </Card>
           )}
+
+          <TransportTimeline
+            orderId={order.id}
+            locations={transportLocations}
+            order={order}
+            route={route}
+            onReportLocation={() => setLocationModalOpen(true)}
+          />
         </div>
       </div>
 
