@@ -284,7 +284,7 @@ function getMockData(): AppData {
     },
     {
       id: generateId(),
-      order_id: orders[4].id,
+      order_id: orders[1].id,
       location: '广州市天河区',
       latitude: 23.1291,
       longitude: 113.2644,
@@ -295,7 +295,7 @@ function getMockData(): AppData {
     },
     {
       id: generateId(),
-      order_id: orders[4].id,
+      order_id: orders[1].id,
       location: '广州市白云区',
       latitude: 23.1800,
       longitude: 113.2700,
