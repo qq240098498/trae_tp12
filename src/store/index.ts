@@ -27,10 +27,22 @@ import type {
   InsuranceType,
   ClaimReason,
   TransportLocation,
+  TrackStatistics,
+  OrderTrackProgress,
+  TrackReportValidationResult,
   CageType,
   LuxuryLevel,
 } from '@/types';
 import { generateId, generateOrderNo } from '@/utils';
+import {
+  sortLocationsByTime,
+  buildTrackStatistics,
+  buildOrderTrackProgress,
+  validateTrackReportData,
+  filterLocationsByTimeRange,
+  countReportsByDriver,
+  countReportsByVehicle,
+} from '@/utils/trackUtils';
 
 interface AppState {
   pets: Pet[];
@@ -72,7 +84,7 @@ interface AppState {
   updateOrderStatus: (id: string, status: OrderStatus) => void;
   addOrderStatusLog: (log: Omit<OrderStatusLog, 'id' | 'created_at'>) => void;
 
-  addTransportLocation: (location: Omit<TransportLocation, 'id' | 'reported_at'>) => void;
+  addTransportLocation: (location: Omit<TransportLocation, 'id' | 'reported_at'>) => TransportLocation;
 
   addException: (exception: Omit<TransportException, 'id' | 'exception_no' | 'reported_at' | 'processing_logs'>) => void;
   updateExceptionStatus: (id: string, status: ExceptionStatus, handlerName: string, resolution?: string) => void;
@@ -93,6 +105,17 @@ interface AppState {
   addInsuranceClaim: (claim: Omit<InsuranceClaim, 'id' | 'claim_no' | 'submitted_at' | 'processing_logs'>) => void;
   updateInsuranceClaimStatus: (id: string, status: ClaimStatus, reviewerName: string, approvedAmount?: number, resolution?: string) => void;
   addInsuranceClaimProcessingLog: (claimId: string, log: Omit<ClaimProcessingLog, 'id' | 'claim_id' | 'created_at'>) => void;
+
+  getOrderLocations: (orderId: string) => TransportLocation[];
+  getCurrentLocation: (orderId: string) => TransportLocation | null;
+  getTrackStatistics: () => TrackStatistics;
+  getOrderTrackProgress: (orderId: string) => OrderTrackProgress | null;
+  getAllOrderTrackProgress: () => OrderTrackProgress[];
+  validateTrackReport: (orderId: string, location: string) => TrackReportValidationResult;
+  batchAddTransportLocations: (locations: Omit<TransportLocation, 'id' | 'reported_at'>[]) => TransportLocation[];
+  getLocationsByTimeRange: (startTime: Date, endTime: Date) => TransportLocation[];
+  getDriverReportCount: (driverName: string) => number;
+  getVehicleReportCount: (vehicleId: string) => number;
 }
 
 const STORAGE_KEY = 'pet_shipping_app_state';
@@ -845,20 +868,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       return newState;
     }),
 
-  addTransportLocation: (location) =>
+  addTransportLocation: (location) => {
+    const newLocation: TransportLocation = {
+      ...location,
+      id: generateId(),
+      reported_at: new Date().toISOString(),
+    };
     set((state) => {
-      const newLocation: TransportLocation = {
-        ...location,
-        id: generateId(),
-        reported_at: new Date().toISOString(),
-      };
       const newState = {
         ...state,
         transportLocations: [...state.transportLocations, newLocation],
       };
       saveToStorage(newState);
       return newState;
-    }),
+    });
+    return newLocation;
+  },
 
   addException: (exception) =>
     set((state) => {
@@ -1128,4 +1153,85 @@ export const useAppStore = create<AppState>((set, get) => ({
       saveToStorage(newState);
       return newState;
     }),
+
+  getOrderLocations: (orderId) => {
+    const state = get();
+    return sortLocationsByTime(
+      state.transportLocations.filter((loc) => loc.order_id === orderId),
+    );
+  },
+
+  getCurrentLocation: (orderId) => {
+    const locations = get().getOrderLocations(orderId);
+    return locations.length > 0 ? locations[locations.length - 1] : null;
+  },
+
+  getTrackStatistics: () => {
+    const state = get();
+    return buildTrackStatistics({
+      allLocations: state.transportLocations,
+      orders: state.orders,
+      vehicles: state.vehicles,
+    });
+  },
+
+  getOrderTrackProgress: (orderId) => {
+    const state = get();
+    const order = state.orders.find((o) => o.id === orderId);
+    if (!order) return null;
+
+    const pet = state.pets.find((p) => p.id === order.pet_id);
+    const route = state.routes.find((r) => r.id === order.route_id);
+    const locations = state.getOrderLocations(orderId);
+
+    return buildOrderTrackProgress({ order, locations, pet, route });
+  },
+
+  getAllOrderTrackProgress: () => {
+    const state = get();
+    const inTransitOrders = state.orders.filter((o) =>
+      ['accepted', 'picked_up', 'in_transit', 'arrived'].includes(o.status),
+    );
+    return inTransitOrders
+      .map((o) => state.getOrderTrackProgress(o.id))
+      .filter((p): p is OrderTrackProgress => p !== null);
+  },
+
+  validateTrackReport: (orderId, location) => {
+    const state = get();
+    const order = state.orders.find((o) => o.id === orderId);
+    const currentLoc = state.getCurrentLocation(orderId);
+    return validateTrackReportData(order, location, currentLoc);
+  },
+
+  batchAddTransportLocations: (locations) =>
+    set((state) => {
+      const now = new Date().toISOString();
+      const newLocations: TransportLocation[] = locations.map((loc) => ({
+        ...loc,
+        id: generateId(),
+        reported_at: now,
+      }));
+      const newState = {
+        ...state,
+        transportLocations: [...state.transportLocations, ...newLocations],
+      };
+      saveToStorage(newState);
+      return newState;
+    }),
+
+  getLocationsByTimeRange: (startTime, endTime) => {
+    const state = get();
+    return filterLocationsByTimeRange(state.transportLocations, startTime, endTime);
+  },
+
+  getDriverReportCount: (driverName) => {
+    const state = get();
+    return countReportsByDriver(state.transportLocations, driverName);
+  },
+
+  getVehicleReportCount: (vehicleId) => {
+    const state = get();
+    return countReportsByVehicle(state.transportLocations, state.orders, vehicleId);
+  },
 }));

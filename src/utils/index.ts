@@ -15,6 +15,9 @@ import type {
   InsuranceClaim,
   CageType,
   LuxuryLevel,
+  TransportLocation,
+  TrackStatistics,
+  OrderTrackProgress,
 } from '@/types';
 
 export const CAGE_PRICING: Record<CageType, { price: number; label: string; description: string }> = {
@@ -331,3 +334,309 @@ export function buildSurrenderReason(selectedReason: string, customText: string)
   }
   return selectedReason;
 }
+
+export function calculateDistanceKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export function calculateTotalDistanceKm(locations: TransportLocation[]): number {
+  let totalDistance = 0;
+  for (let i = 1; i < locations.length; i++) {
+    const prev = locations[i - 1];
+    const curr = locations[i];
+    if (prev.latitude && prev.longitude && curr.latitude && curr.longitude) {
+      totalDistance += calculateDistanceKm(
+        prev.latitude,
+        prev.longitude,
+        curr.latitude,
+        curr.longitude,
+      );
+    }
+  }
+  return Math.round(totalDistance * 100) / 100;
+}
+
+export function calculateAvgSpeedKmh(locations: TransportLocation[]): number {
+  if (locations.length < 2) return 0;
+
+  const totalDistance = calculateTotalDistanceKm(locations);
+  if (totalDistance === 0) return 0;
+
+  const startTime = new Date(locations[0].reported_at).getTime();
+  const endTime = new Date(locations[locations.length - 1].reported_at).getTime();
+  const hours = (endTime - startTime) / (1000 * 60 * 60);
+
+  if (hours === 0) return 0;
+  return Math.round((totalDistance / hours) * 100) / 100;
+}
+
+export function calculateAvgIntervalMinutes(locations: TransportLocation[]): number {
+  if (locations.length < 2) return 0;
+
+  let totalInterval = 0;
+  for (let i = 1; i < locations.length; i++) {
+    const diff =
+      (new Date(locations[i].reported_at).getTime() -
+        new Date(locations[i - 1].reported_at).getTime()) /
+      (1000 * 60);
+    totalInterval += diff;
+  }
+
+  return Math.round(totalInterval / (locations.length - 1));
+}
+
+export function getTimeSinceLastReportMinutes(location: TransportLocation | null): number {
+  if (!location) return Infinity;
+  return (Date.now() - new Date(location.reported_at).getTime()) / (1000 * 60);
+}
+
+export function formatIntervalMinutes(minutes: number): string {
+  if (minutes === Infinity || minutes === 0) return '--';
+  if (minutes < 60) return `${Math.round(minutes)}分钟`;
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`;
+}
+
+export function isReportOverdue(
+  location: TransportLocation | null,
+  expectedIntervalMinutes: number = 60,
+): boolean {
+  if (!location) return true;
+  const timeSince = getTimeSinceLastReportMinutes(location);
+  return timeSince > expectedIntervalMinutes * 2;
+}
+
+export function getReportFrequencyStatus(
+  locations: TransportLocation[],
+): 'normal' | 'frequent' | 'infrequent' | 'none' {
+  if (locations.length === 0) return 'none';
+  if (locations.length < 2) return 'normal';
+
+  const avgInterval = calculateAvgIntervalMinutes(locations);
+  if (avgInterval < 15) return 'frequent';
+  if (avgInterval > 120) return 'infrequent';
+  return 'normal';
+}
+
+export function getReportFrequencyStatusText(
+  status: 'normal' | 'frequent' | 'infrequent' | 'none',
+): string {
+  const map = {
+    normal: '上报正常',
+    frequent: '上报频繁',
+    infrequent: '上报不足',
+    none: '暂无上报',
+  };
+  return map[status];
+}
+
+export function getReportFrequencyStatusColor(
+  status: 'normal' | 'frequent' | 'infrequent' | 'none',
+): string {
+  const map = {
+    normal: 'text-green-600 bg-green-50',
+    frequent: 'text-amber-600 bg-amber-50',
+    infrequent: 'text-red-600 bg-red-50',
+    none: 'text-gray-500 bg-gray-50',
+  };
+  return map[status];
+}
+
+export function calculateProgressPercent(
+  locations: TransportLocation[],
+  routeDistanceKm?: number,
+): number {
+  if (!routeDistanceKm || locations.length === 0) return 10;
+  const traveledDistance = calculateTotalDistanceKm(locations);
+  if (traveledDistance === 0) {
+    const baseProgress = 10;
+    const perLocationProgress = (85 - baseProgress) / Math.max(locations.length, 1);
+    return Math.min(baseProgress + locations.length * perLocationProgress, 95);
+  }
+  return Math.min(Math.round((traveledDistance / routeDistanceKm) * 100), 95);
+}
+
+export function estimateArrivalTime(
+  locations: TransportLocation[],
+  remainingDistanceKm: number,
+): Date | null {
+  if (locations.length < 2 || remainingDistanceKm <= 0) return null;
+  const avgSpeed = calculateAvgSpeedKmh(locations);
+  if (avgSpeed === 0) return null;
+  const hoursNeeded = remainingDistanceKm / avgSpeed;
+  return new Date(Date.now() + hoursNeeded * 60 * 60 * 1000);
+}
+
+export function getTrackStatisticsSummary(
+  statistics: TrackStatistics,
+): { label: string; value: string; tip: string }[] {
+  return [
+    {
+      label: '总上报次数',
+      value: statistics.totalReports.toString(),
+      tip: '系统累计接收的位置上报总数',
+    },
+    {
+      label: '今日上报',
+      value: statistics.todayReports.toString(),
+      tip: '今日0点至今的位置上报数量',
+    },
+    {
+      label: '近1小时上报',
+      value: statistics.reportsLastHour.toString(),
+      tip: '最近1小时内的位置上报数量',
+    },
+    {
+      label: '近24小时上报',
+      value: statistics.reportsLast24Hours.toString(),
+      tip: '最近24小时内的位置上报数量',
+    },
+    {
+      label: '平均上报间隔',
+      value: `${statistics.avgReportIntervalMinutes}分钟`,
+      tip: '所有运输订单的平均上报时间间隔',
+    },
+    {
+      label: '单均上报次数',
+      value: statistics.avgReportsPerOrder.toFixed(1),
+      tip: '每个运输订单的平均位置上报次数',
+    },
+    {
+      label: '运输中订单',
+      value: statistics.inTransitOrders.toString(),
+      tip: '当前处于运输状态的订单数量',
+    },
+    {
+      label: '活跃司机',
+      value: statistics.uniqueDrivers.toString(),
+      tip: '今日有位置上报的司机数量',
+    },
+  ];
+}
+
+export function hasTemperatureAlert(location: TransportLocation): boolean {
+  if (location.temperature === undefined) return false;
+  return location.temperature < 10 || location.temperature > 30;
+}
+
+export function hasHumidityAlert(location: TransportLocation): boolean {
+  if (location.humidity === undefined) return false;
+  return location.humidity < 30 || location.humidity > 70;
+}
+
+export function hasBatteryAlert(location: TransportLocation): boolean {
+  if (location.battery_level === undefined) return false;
+  return location.battery_level < 20;
+}
+
+export function getLocationAlerts(
+  location: TransportLocation,
+): Array<{ type: 'temperature' | 'humidity' | 'battery'; message: string }> {
+  const alerts: Array<{
+    type: 'temperature' | 'humidity' | 'battery';
+    message: string;
+  }> = [];
+
+  if (hasTemperatureAlert(location)) {
+    alerts.push({
+      type: 'temperature',
+      message: `温度异常：${location.temperature}℃`,
+    });
+  }
+
+  if (hasHumidityAlert(location)) {
+    alerts.push({
+      type: 'humidity',
+      message: `湿度异常：${location.humidity}%`,
+    });
+  }
+
+  if (hasBatteryAlert(location)) {
+    alerts.push({
+      type: 'battery',
+      message: `电量低：${location.battery_level}%`,
+    });
+  }
+
+  return alerts;
+}
+
+export function sortLocationsByTime(
+  locations: TransportLocation[],
+  ascending: boolean = true,
+): TransportLocation[] {
+  return [...locations].sort((a, b) => {
+    const diff =
+      new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime();
+    return ascending ? diff : -diff;
+  });
+}
+
+export function filterLocationsByOrder(
+  locations: TransportLocation[],
+  orderId: string,
+): TransportLocation[] {
+  return locations.filter((l) => l.order_id === orderId);
+}
+
+export function filterLocationsByTimeRange(
+  locations: TransportLocation[],
+  startTime: Date,
+  endTime: Date,
+): TransportLocation[] {
+  return locations.filter((l) => {
+    const t = new Date(l.reported_at);
+    return t >= startTime && t <= endTime;
+  });
+}
+
+export function getLatestLocation(
+  locations: TransportLocation[],
+): TransportLocation | null {
+  if (locations.length === 0) return null;
+  return sortLocationsByTime(locations, false)[0];
+}
+
+export function formatTrackProgress(
+  progress: OrderTrackProgress,
+): {
+  title: string;
+  subtitle: string;
+  status: string;
+  etaText: string;
+} {
+  const subtitle = progress.route
+    ? `${progress.route.origin} → ${progress.route.destination} (${progress.route.distanceKm}km)`
+    : '路线信息未知';
+
+  const status =
+    progress.currentLocation?.location || '待开始运输';
+
+  const etaText = progress.estimatedArrival
+    ? `预计到达：${formatDate(progress.estimatedArrival)}`
+    : '到达时间待定';
+
+  return {
+    title: `${progress.petName} - ${progress.orderNo}`,
+    subtitle,
+    status,
+    etaText,
+  };
+}
+

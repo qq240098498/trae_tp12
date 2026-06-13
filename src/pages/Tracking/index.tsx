@@ -23,10 +23,24 @@ import {
   Activity,
   Map,
   RefreshCw,
+  Thermometer,
+  Droplets,
+  Battery,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
-import { formatDate, getStatusText } from '@/utils';
+import { useTrackReporting, useTrackStatistics } from '@/hooks';
+import {
+  formatDate,
+  getStatusText,
+  formatIntervalMinutes,
+  getReportFrequencyStatus,
+  getReportFrequencyStatusText,
+  getReportFrequencyStatusColor,
+  getTimeSinceLastReportMinutes,
+  getLocationAlerts,
+  calculateAvgIntervalMinutes,
+} from '@/utils';
 import type { Order, TransportLocation } from '@/types';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -53,6 +67,7 @@ const PET_STATUS_OPTIONS = [
 
 export default function TrackingIndex() {
   const navigate = useNavigate();
+
   const {
     orders,
     pets,
@@ -60,9 +75,29 @@ export default function TrackingIndex() {
     vehicles,
     employees,
     transportLocations,
-    addOrderStatusLog,
-    addTransportLocation,
+    getOrderLocations,
+    getCurrentLocation,
   } = useAppStore();
+
+  const {
+    isReporting,
+    reportError,
+    reportSuccess,
+    reportLocation,
+    validateReport,
+    canReport,
+    getTimeSinceLastReport,
+    getReportCount,
+  } = useTrackReporting({
+    autoValidate: true,
+    showSuccessAnimation: true,
+  });
+
+  const { allOrderProgress, getOrderProgress, refresh, isRefreshing } =
+    useTrackStatistics({
+      autoRefresh: true,
+      refreshIntervalMs: 30000,
+    });
 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -70,7 +105,6 @@ export default function TrackingIndex() {
   const [location, setLocation] = useState('');
   const [locationRemark, setLocationRemark] = useState('');
   const [selectedPetStatus, setSelectedPetStatus] = useState<string | null>(null);
-  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [showMapOrderId, setShowMapOrderId] = useState<string | null>(null);
   const [duplicateError, setDuplicateError] = useState('');
 
@@ -82,27 +116,9 @@ export default function TrackingIndex() {
     [orders],
   );
 
-  const getOrderLocations = (orderId: string): TransportLocation[] => {
-    return transportLocations
-      .filter((loc) => loc.order_id === orderId)
-      .sort(
-        (a, b) =>
-          new Date(a.reported_at).getTime() - new Date(b.reported_at).getTime(),
-      );
-  };
-
-  const getCurrentLocation = (orderId: string) => {
-    const locations = getOrderLocations(orderId);
-    return locations[locations.length - 1];
-  };
-
   const getProgress = (order: Order) => {
-    const route = routes.find((r) => r.id === order.route_id);
-    const locationCount = getOrderLocations(order.id).length;
-    if (!route || locationCount === 0) return 10;
-    const baseProgress = 10;
-    const perLocationProgress = (85 - baseProgress) / Math.max(locationCount, 1);
-    return Math.min(baseProgress + locationCount * perLocationProgress, 95);
+    const progress = getOrderProgress(order.id);
+    return progress?.progressPercent ?? 10;
   };
 
   const getPetName = (petId: string) =>
@@ -143,43 +159,24 @@ export default function TrackingIndex() {
     setLocation((prev) => (prev ? `${prev} ${quickLoc}` : quickLoc));
   };
 
-  const handleReportLocation = () => {
-    if (!currentOrderId || !location.trim()) return;
-    const trimmedLocation = location.trim();
+  const handleReportLocation = async () => {
+    if (!currentOrderId) return;
 
-    const currentLoc = getCurrentLocation(currentOrderId);
-    if (currentLoc && currentLoc.location === trimmedLocation) {
-      setDuplicateError('当前位置与上次上报位置相同，请输入新的位置');
+    const validation = validateReport(currentOrderId, location);
+    if (!validation.valid) {
+      setDuplicateError(validation.error || '');
       return;
     }
 
-    const trimmedRemark = locationRemark.trim();
-    const petStatusText = selectedPetStatus ? `宠物${selectedPetStatus}` : '';
-    const finalRemark = [trimmedRemark, petStatusText].filter(Boolean).join('，') || '位置上报';
-
-    const order = orders.find((o) => o.id === currentOrderId);
-    const employee = order ? getEmployee(order.employee_id) : null;
-    const vehicle = order ? getVehicle(order.vehicle_id) : null;
-
-    addOrderStatusLog({
-      order_id: currentOrderId,
-      status: order?.status || 'in_transit',
-      location: trimmedLocation,
-      remark: finalRemark,
+    const result = await reportLocation(currentOrderId, location, {
+      remark: locationRemark,
+      petStatus: selectedPetStatus || undefined,
     });
 
-    addTransportLocation({
-      order_id: currentOrderId,
-      location: trimmedLocation,
-      address: trimmedLocation,
-      remark: finalRemark,
-      reported_by: employee?.name || vehicle?.driver_name || '司机',
-    });
-
-    closeReportModal();
-
-    setShowSuccessAnimation(true);
-    setTimeout(() => setShowSuccessAnimation(false), 2500);
+    if (result) {
+      closeReportModal();
+      refresh();
+    }
   };
 
   const toggleMapView = (orderId: string) => {
@@ -199,6 +196,27 @@ export default function TrackingIndex() {
     return map[status] || 'default';
   };
 
+  const renderLocationAlerts = (loc: TransportLocation) => {
+    const alerts = getLocationAlerts(loc);
+    if (alerts.length === 0) return null;
+
+    return (
+      <div className="flex gap-2 mt-2">
+        {alerts.map((alert, idx) => (
+          <div
+            key={idx}
+            className="flex items-center gap-1 text-xs text-red-600 bg-red-50 px-2 py-1 rounded"
+          >
+            {alert.type === 'temperature' && <Thermometer className="w-3 h-3" />}
+            {alert.type === 'humidity' && <Droplets className="w-3 h-3" />}
+            {alert.type === 'battery' && <Battery className="w-3 h-3" />}
+            {alert.message}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const renderOrderCard = (order: Order, index: number) => {
     const pet = getPet(order.pet_id);
     const route = getRoute(order.route_id);
@@ -208,6 +226,13 @@ export default function TrackingIndex() {
     const progress = getProgress(order);
     const allLocations = getOrderLocations(order.id);
     const isExpanded = expandedOrderId === order.id;
+    const orderProgress = getOrderProgress(order.id);
+
+    const timeSinceLastReport = getTimeSinceLastReportMinutes(currentLoc);
+    const frequencyStatus = getReportFrequencyStatus(allLocations);
+    const avgInterval = calculateAvgIntervalMinutes(allLocations);
+    const reportCount = getReportCount(order.id);
+    const canReportNow = canReport(order.id);
 
     return (
       <motion.div
@@ -245,7 +270,18 @@ export default function TrackingIndex() {
                 </h3>
               </div>
             </div>
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 flex items-center gap-2">
+              {orderProgress && (
+                <span
+                  className={cn(
+                    'text-xs px-2 py-1 rounded-full',
+                    getReportFrequencyStatusColor(frequencyStatus),
+                  )}
+                  title={getReportFrequencyStatusText(frequencyStatus)}
+                >
+                  {getReportFrequencyStatusText(frequencyStatus)}
+                </span>
+              )}
               {isExpanded ? (
                 <ChevronDown className="w-5 h-5 text-gray-400" />
               ) : (
@@ -266,7 +302,12 @@ export default function TrackingIndex() {
             <div className="bg-gradient-to-r from-primary-50 to-blue-50 rounded-xl p-3 mb-4">
               <div className="flex items-start gap-2">
                 <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center flex-shrink-0">
-                  <Truck className="w-4 h-4 text-white animate-pulse" />
+                  <Truck
+                    className={cn(
+                      'w-4 h-4 text-white',
+                      timeSinceLastReport > 120 ? 'animate-pulse' : '',
+                    )}
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
@@ -274,6 +315,12 @@ export default function TrackingIndex() {
                     <span className="text-xs text-primary-600 font-medium">
                       实时
                     </span>
+                    {timeSinceLastReport > 120 && (
+                      <span className="text-xs text-red-500 font-medium flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        久未更新
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-medium text-gray-800 truncate">
                     {currentLoc.location}
@@ -287,7 +334,14 @@ export default function TrackingIndex() {
                       <User className="w-3 h-3" />
                       {currentLoc.reported_by}
                     </span>
+                    {avgInterval > 0 && (
+                      <span className="flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3" />
+                        间隔 {formatIntervalMinutes(avgInterval)}
+                      </span>
+                    )}
                   </div>
+                  {renderLocationAlerts(currentLoc)}
                 </div>
               </div>
             </div>
@@ -327,7 +381,7 @@ export default function TrackingIndex() {
             </div>
             <div className="flex justify-between text-xs text-gray-400 mt-2">
               <span>运输进度 {progress.toFixed(0)}%</span>
-              <span>共 {allLocations.length} 次上报</span>
+              <span>共 {reportCount} 次上报</span>
             </div>
           </div>
         </div>
@@ -365,6 +419,36 @@ export default function TrackingIndex() {
                   )}
                 </div>
 
+                {orderProgress && (
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="bg-gray-50 rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">上报次数</div>
+                      <div className="text-lg font-bold text-gray-800">
+                        {orderProgress.reportCount}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">平均间隔</div>
+                      <div className="text-lg font-bold text-gray-800">
+                        {formatIntervalMinutes(orderProgress.avgIntervalMinutes)}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">距上次</div>
+                      <div
+                        className={cn(
+                          'text-lg font-bold',
+                          timeSinceLastReport > 120
+                            ? 'text-red-600'
+                            : 'text-gray-800',
+                        )}
+                      >
+                        {formatIntervalMinutes(timeSinceLastReport)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {allLocations.length > 0 && (
                   <div className="mb-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
@@ -379,9 +463,14 @@ export default function TrackingIndex() {
                         .slice(0, 5)
                         .reverse()
                         .map((loc, idx) => {
-                          const isLatest = idx === allLocations.length - 1 || (allLocations.length > 5 && idx === 4);
+                          const isLatest =
+                            idx === allLocations.length - 1 ||
+                            (allLocations.length > 5 && idx === 4);
                           return (
-                            <div key={loc.id} className="relative mb-3 last:mb-0">
+                            <div
+                              key={loc.id}
+                              className="relative mb-3 last:mb-0"
+                            >
                               <div
                                 className={cn(
                                   'absolute -left-6 w-5 h-5 rounded-full flex items-center justify-center border-2',
@@ -406,6 +495,7 @@ export default function TrackingIndex() {
                                     {loc.remark}
                                   </p>
                                 )}
+                                {renderLocationAlerts(loc)}
                               </div>
                             </div>
                           );
@@ -423,8 +513,9 @@ export default function TrackingIndex() {
                       e.stopPropagation();
                       openReportModal(order.id);
                     }}
+                    disabled={!canReportNow || isReporting}
                   >
-                    上报位置
+                    {isReporting ? '上报中...' : '上报位置'}
                   </Button>
                   <Button
                     size="sm"
@@ -475,7 +566,7 @@ export default function TrackingIndex() {
   return (
     <div className="space-y-6 relative">
       <AnimatePresence>
-        {showSuccessAnimation && (
+        {reportSuccess && (
           <motion.div
             initial={{ opacity: 0, y: -20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -507,9 +598,19 @@ export default function TrackingIndex() {
             实时追踪运输中的宠物，查看位置更新和运输进度
           </p>
         </div>
-        <Badge variant="info" className="text-sm">
-          运输中 {inTransitOrders.length} 单
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<RefreshCw className={cn('w-4 h-4', isRefreshing ? 'animate-spin' : '')} />}
+            onClick={refresh}
+          >
+            刷新
+          </Button>
+          <Badge variant="info" className="text-sm">
+            运输中 {inTransitOrders.length} 单
+          </Badge>
+        </div>
       </div>
 
       {inTransitOrders.length === 0 ? (
@@ -540,15 +641,22 @@ export default function TrackingIndex() {
             <Button
               variant="primary"
               onClick={handleReportLocation}
-              disabled={!location.trim() || !!duplicateError}
+              disabled={!location.trim() || !!duplicateError || isReporting}
               leftIcon={<Send className="w-4 h-4" />}
             >
-              确认上报
+              {isReporting ? '上报中...' : '确认上报'}
             </Button>
           </div>
         }
       >
         <div className="space-y-4">
+          {reportError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {reportError}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               常用位置
@@ -565,7 +673,7 @@ export default function TrackingIndex() {
                       'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all border',
                       location.includes(loc.label)
                         ? 'bg-primary-500 text-white border-primary-500'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300 hover:bg-primary-50'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300 hover:bg-primary-50',
                     )}
                   >
                     <Icon className="w-3.5 h-3.5" />
@@ -602,14 +710,14 @@ export default function TrackingIndex() {
                     type="button"
                     onClick={() =>
                       setSelectedPetStatus(
-                        selectedPetStatus === status.label ? null : status.label
+                        selectedPetStatus === status.label ? null : status.label,
                       )
                     }
                     className={cn(
                       'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs transition-all border',
                       isSelected
                         ? `${status.bg} ${status.color} border-current font-medium shadow-sm`
-                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300',
                     )}
                   >
                     <Icon className="w-4 h-4" />

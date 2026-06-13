@@ -124,6 +124,58 @@ export interface TransportLocation {
   remark?: string;
   reported_by: string;
   reported_at: string;
+  speed_kmh?: number;
+  heading_deg?: number;
+  accuracy_m?: number;
+  battery_level?: number;
+  device_info?: string;
+  pet_status?: string;
+  temperature?: number;
+  humidity?: number;
+}
+
+export interface TrackReportValidationResult {
+  valid: boolean;
+  error?: string;
+  warnings?: string[];
+}
+
+export interface TrackStatistics {
+  totalReports: number;
+  todayReports: number;
+  inTransitOrders: number;
+  avgReportIntervalMinutes: number;
+  avgReportsPerOrder: number;
+  reportsLastHour: number;
+  reportsLast24Hours: number;
+  uniqueDrivers: number;
+  uniqueVehicles: number;
+  totalDistanceKm: number;
+  avgSpeedKmh?: number;
+  overdueReportOrders: number;
+  ordersWithLocation: number;
+  complianceRate: number;
+  petStatusDistribution?: Record<string, number>;
+  avgReportsPerDriver?: number;
+  avgReportsPerVehicle?: number;
+}
+
+export interface OrderTrackProgress {
+  orderId: string;
+  orderNo: string;
+  petName: string;
+  currentLocation: TransportLocation | null;
+  reportCount: number;
+  firstReportAt: string | null;
+  lastReportAt: string | null;
+  avgIntervalMinutes: number;
+  progressPercent: number;
+  estimatedArrival: string | null;
+  route: {
+    origin: string;
+    destination: string;
+    distanceKm: number;
+  } | null;
 }
 
 export type TransportStatus = 'idle' | 'waiting' | 'loading' | 'in_transit' | 'stopped' | 'unloading' | 'completed';
