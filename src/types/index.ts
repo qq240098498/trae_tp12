@@ -40,6 +40,9 @@ export interface Route {
   is_active: boolean;
 }
 
+export type CageType = '小型笼' | '中型笼' | '大型笼' | '豪华笼';
+export type LuxuryLevel = '经济' | '舒适' | '豪华' | '尊享';
+
 export type VehicleType = '小型' | '中型' | '大型' | '豪华';
 export type VehicleStatus = '空闲' | '使用中' | '维护中';
 
@@ -74,9 +77,6 @@ export interface PricingRule {
   surcharge: number;
 }
 
-export type CageType = 'standard' | 'reinforced' | 'luxury';
-export type LuxuryLevel = 'economy' | 'comfort' | 'luxury' | 'vip';
-
 export type OrderStatus = 'pending' | 'accepted' | 'picked_up' | 'in_transit' | 'arrived' | 'completed' | 'cancelled';
 
 export interface Order {
@@ -89,6 +89,8 @@ export interface Order {
   employee_id: string;
   cage_type: CageType;
   luxury_level: LuxuryLevel;
+  cage_price: number;
+  luxury_price: number;
   base_price: number;
   surcharge: number;
   total_price: number;

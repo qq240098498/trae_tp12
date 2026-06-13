@@ -175,8 +175,10 @@ function getMockData(): AppData {
       route_id: routes[0].id,
       vehicle_id: vehicles[1].id,
       employee_id: employees[1].id,
-      cage_type: 'reinforced' as CageType,
-      luxury_level: 'comfort' as LuxuryLevel,
+      cage_type: '大型笼' as CageType,
+      luxury_level: '舒适' as LuxuryLevel,
+      cage_price: 100,
+      luxury_price: 96,
       base_price: 50,
       surcharge: 30,
       total_price: 380,
@@ -198,8 +200,10 @@ function getMockData(): AppData {
       route_id: routes[1].id,
       vehicle_id: vehicles[0].id,
       employee_id: employees[0].id,
-      cage_type: 'standard' as CageType,
-      luxury_level: 'economy' as LuxuryLevel,
+      cage_type: '小型笼' as CageType,
+      luxury_level: '经济' as LuxuryLevel,
+      cage_price: 30,
+      luxury_price: 0,
       base_price: 45,
       surcharge: 0,
       total_price: 165,
@@ -587,8 +591,21 @@ const initialData: AppData = (() => {
   const stored = loadFromStorage();
   if (stored) {
     const mockData = getMockData();
+    const migratedOrders = (stored.orders ?? mockData.orders).map((order) => {
+      if (!order.cage_type) {
+        return {
+          ...order,
+          cage_type: '中型笼' as CageType,
+          luxury_level: '经济' as LuxuryLevel,
+          cage_price: 60,
+          luxury_price: 0,
+        };
+      }
+      return order;
+    });
     return {
       ...stored,
+      orders: migratedOrders,
       exceptions: stored.exceptions ?? mockData.exceptions,
       transportLocations: stored.transportLocations ?? mockData.transportLocations,
     };

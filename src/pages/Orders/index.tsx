@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Search, Plus, Eye, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
-import { formatDate, formatPrice, getStatusText, getStatusColor, getCageLabel, getLuxuryLabel } from '@/utils';
+import { formatDate, formatPrice, getStatusText, getStatusColor } from '@/utils';
 import type { Order, OrderStatus } from '@/types';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -94,20 +94,6 @@ export default function OrdersIndex() {
       title: '车辆',
       render: (record: Order) => (
         <span className="text-gray-600">{getVehicleText(record.vehicle_id)}</span>
-      ),
-    },
-    {
-      key: 'cage_type',
-      title: '笼子',
-      render: (record: Order) => (
-        <span className="text-gray-600 text-xs">{getCageLabel(record.cage_type)}</span>
-      ),
-    },
-    {
-      key: 'luxury_level',
-      title: '等级',
-      render: (record: Order) => (
-        <span className="text-gray-600 text-xs">{getLuxuryLabel(record.luxury_level)}</span>
       ),
     },
     {

@@ -17,6 +17,20 @@ import type {
   LuxuryLevel,
 } from '@/types';
 
+export const CAGE_PRICING: Record<CageType, { price: number; label: string; description: string }> = {
+  '小型笼': { price: 30, label: '小型笼', description: '适用于5kg以下宠物，基础通风笼具' },
+  '中型笼': { price: 60, label: '中型笼', description: '适用于5-15kg宠物，加固笼具带饮水器' },
+  '大型笼': { price: 100, label: '大型笼', description: '适用于15-30kg宠物，宽敞加固笼具' },
+  '豪华笼': { price: 200, label: '豪华笼', description: '不限体重，恒温控制+实时监控+舒适垫材' },
+};
+
+export const LUXURY_PRICING: Record<LuxuryLevel, { multiplier: number; label: string; description: string }> = {
+  '经济': { multiplier: 1.0, label: '经济', description: '标准运输车辆，基础环境保障' },
+  '舒适': { multiplier: 1.3, label: '舒适', description: '空调恒温车厢，定时巡查照看' },
+  '豪华': { multiplier: 1.8, label: '豪华', description: '独立空调隔间，专人陪护，实时视频' },
+  '尊享': { multiplier: 2.5, label: '尊享', description: 'VIP专车直达，全程一对一陪护，定制化服务' },
+};
+
 export function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -58,6 +72,8 @@ export function calculatePrice(
   vehicle: Vehicle,
   pet: Pet,
   pricingRules: PricingRule[],
+  cageType: CageType = '中型笼',
+  luxuryLevel: LuxuryLevel = '经济',
 ): number {
   const matchingRule = pricingRules.find(
     (rule) =>
@@ -72,29 +88,12 @@ export function calculatePrice(
 
   const distancePrice = route.distance_km * pricePerKm;
   const basePrice = route.base_price;
+  const transportPrice = basePrice + distancePrice + surcharge;
 
-  return basePrice + distancePrice + surcharge;
-}
+  const cagePrice = CAGE_PRICING[cageType].price;
+  const luxuryMultiplier = LUXURY_PRICING[luxuryLevel].multiplier;
 
-export const CAGE_CONFIG: Record<CageType, { label: string; desc: string; icon: string; price: number }> = {
-  standard: { label: '标准笼', desc: '常规运输笼，满足基本运输需求', icon: '📦', price: 0 },
-  reinforced: { label: '加固笼', desc: '加厚材质，防撞防逃，适合中大型犬', icon: '🛡️', price: 80 },
-  luxury: { label: '豪华笼', desc: '空间宽敞，内置水壶食盆，舒适透气', icon: '👑', price: 200 },
-};
-
-export const LUXURY_CONFIG: Record<LuxuryLevel, { label: string; desc: string; icon: string; multiplier: number }> = {
-  economy: { label: '经济型', desc: '普通运输车辆，标准服务', icon: '🚐', multiplier: 1.0 },
-  comfort: { label: '舒适型', desc: '空调恒温车厢，定时巡查', icon: '🚗', multiplier: 1.3 },
-  luxury: { label: '豪华型', desc: '独立空调舱，实时监控，专人陪护', icon: '🌟', multiplier: 1.8 },
-  vip: { label: 'VIP尊享', desc: '专车专送，一对一服务，全程直播', icon: '💎', multiplier: 2.5 },
-};
-
-export function getCageLabel(cageType: CageType): string {
-  return CAGE_CONFIG[cageType]?.label ?? '标准笼';
-}
-
-export function getLuxuryLabel(luxuryLevel: LuxuryLevel): string {
-  return LUXURY_CONFIG[luxuryLevel]?.label ?? '经济型';
+  return Math.round((transportPrice * luxuryMultiplier + cagePrice) * 100) / 100;
 }
 
 export function getStatusText(status: OrderStatus): string {

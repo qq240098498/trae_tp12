@@ -17,9 +17,8 @@ import {
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
-import { formatDate, formatPrice, getStatusText, getCageLabel, getLuxuryLabel } from '@/utils';
-import { CAGE_CONFIG, LUXURY_CONFIG } from '@/utils';
-import type { OrderStatus as AppOrderStatus } from '@/types';
+import { formatDate, formatPrice, getStatusText, CAGE_PRICING, LUXURY_PRICING } from '@/utils';
+import type { OrderStatus as AppOrderStatus, CageType, LuxuryLevel } from '@/types';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -359,6 +358,24 @@ export default function OrderDetail() {
                 icon={Car}
               />
               <InfoItem
+                label="笼具类型"
+                value={
+                  order.cage_type
+                    ? `${CAGE_PRICING[order.cage_type as CageType]?.label || order.cage_type} - ${CAGE_PRICING[order.cage_type as CageType]?.description || ''}`
+                    : '-'
+                }
+                icon={Box}
+              />
+              <InfoItem
+                label="环境等级"
+                value={
+                  order.luxury_level
+                    ? `${LUXURY_PRICING[order.luxury_level as LuxuryLevel]?.label || order.luxury_level} (×${LUXURY_PRICING[order.luxury_level as LuxuryLevel]?.multiplier || 1})`
+                    : '-'
+                }
+                icon={Sparkles}
+              />
+              <InfoItem
                 label="司机"
                 value={
                   vehicle
@@ -371,16 +388,6 @@ export default function OrderDetail() {
                 label="员工"
                 value={employee ? `${employee.name} (${employee.employee_no})` : '-'}
                 icon={User}
-              />
-              <InfoItem
-                label="笼子类型"
-                value={order.cage_type ? `${CAGE_CONFIG[order.cage_type]?.icon || ''} ${getCageLabel(order.cage_type)}` : '-'}
-                icon={Box}
-              />
-              <InfoItem
-                label="车辆豪华等级"
-                value={order.luxury_level ? `${LUXURY_CONFIG[order.luxury_level]?.icon || ''} ${getLuxuryLabel(order.luxury_level)}` : '-'}
-                icon={Sparkles}
               />
             </div>
             {order.remark && (
@@ -401,6 +408,24 @@ export default function OrderDetail() {
                 <span className="text-gray-500">附加费</span>
                 <span className="font-medium text-gray-800">{formatPrice(order.surcharge)}</span>
               </div>
+              {order.cage_price > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 flex items-center gap-1">
+                    <Box className="w-3.5 h-3.5" />
+                    笼具费用 ({order.cage_type})
+                  </span>
+                  <span className="font-medium text-gray-800">{formatPrice(order.cage_price)}</span>
+                </div>
+              )}
+              {order.luxury_price > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    等级加价 ({order.luxury_level})
+                  </span>
+                  <span className="font-medium text-amber-600">{formatPrice(order.luxury_price)}</span>
+                </div>
+              )}
               <div className="pt-3 border-t border-gray-100 flex justify-between items-end">
                 <span className="text-gray-600 font-medium">合计</span>
                 <span className="text-2xl font-bold text-primary-600">{formatPrice(order.total_price)}</span>

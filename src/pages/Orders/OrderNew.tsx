@@ -3,27 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, PawPrint, Route, Car, User, Phone, Clock, FileText, CreditCard, CheckCircle, Shield, Info, ChevronDown, ChevronUp, Box, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
-import { calculatePrice, formatPrice } from '@/utils';
+import { calculatePrice, formatPrice, CAGE_PRICING, LUXURY_PRICING } from '@/utils';
 import type { OrderStatus, InsuranceProduct, CageType, LuxuryLevel } from '@/types';
-import { cn } from '@/lib/utils';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import Badge from '@/components/ui/Badge';
-
-const CAGE_OPTIONS: { value: CageType; label: string; desc: string; icon: string; price: number }[] = [
-  { value: 'standard', label: '标准笼', desc: '常规运输笼，满足基本运输需求', icon: '📦', price: 0 },
-  { value: 'reinforced', label: '加固笼', desc: '加厚材质，防撞防逃，适合中大型犬', icon: '🛡️', price: 80 },
-  { value: 'luxury', label: '豪华笼', desc: '空间宽敞，内置水壶食盆，舒适透气', icon: '👑', price: 200 },
-];
-
-const LUXURY_OPTIONS: { value: LuxuryLevel; label: string; desc: string; icon: string; multiplier: number }[] = [
-  { value: 'economy', label: '经济型', desc: '普通运输车辆，标准服务', icon: '🚐', multiplier: 1.0 },
-  { value: 'comfort', label: '舒适型', desc: '空调恒温车厢，定时巡查', icon: '🚗', multiplier: 1.3 },
-  { value: 'luxury', label: '豪华型', desc: '独立空调舱，实时监控，专人陪护', icon: '🌟', multiplier: 1.8 },
-  { value: 'vip', label: 'VIP尊享', desc: '专车专送，一对一服务，全程直播', icon: '💎', multiplier: 2.5 },
-];
 
 export default function OrderNew() {
   const navigate = useNavigate();
@@ -43,8 +29,8 @@ export default function OrderNew() {
   const [petId, setPetId] = useState('');
   const [routeId, setRouteId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
-  const [cageType, setCageType] = useState<CageType>('standard');
-  const [luxuryLevel, setLuxuryLevel] = useState<LuxuryLevel>('economy');
+  const [cageType, setCageType] = useState<CageType>('中型笼');
+  const [luxuryLevel, setLuxuryLevel] = useState<LuxuryLevel>('经济');
   const [receiverName, setReceiverName] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
   const [pickupTime, setPickupTime] = useState('');
@@ -84,21 +70,18 @@ export default function OrderNew() {
     (p) => p.id === selectedInsuranceProductId,
   );
 
-  const selectedCageOption = CAGE_OPTIONS.find((c) => c.value === cageType);
-  const selectedLuxuryOption = LUXURY_OPTIONS.find((l) => l.value === luxuryLevel);
-
   const priceInfo = useMemo(() => {
     if (!selectedPet || !selectedRoute || !selectedVehicle) {
-      return { basePrice: 0, surcharge: 0, cagePrice: 0, luxuryPremium: 0, total: 0 };
+      return { basePrice: 0, surcharge: 0, cagePrice: 0, luxuryPrice: 0, total: 0 };
     }
-    const transportTotal = calculatePrice(selectedRoute, selectedVehicle, selectedPet, pricingRules);
+    const total = calculatePrice(selectedRoute, selectedVehicle, selectedPet, pricingRules, cageType, luxuryLevel);
     const basePrice = selectedRoute.base_price;
-    const surcharge = transportTotal - basePrice;
-    const cagePrice = selectedCageOption?.price ?? 0;
-    const luxuryPremium = Math.round(transportTotal * ((selectedLuxuryOption?.multiplier ?? 1) - 1));
-    const total = transportTotal + cagePrice + luxuryPremium;
-    return { basePrice, surcharge, cagePrice, luxuryPremium, total };
-  }, [selectedPet, selectedRoute, selectedVehicle, pricingRules, selectedCageOption, selectedLuxuryOption]);
+    const cagePrice = CAGE_PRICING[cageType].price;
+    const transportBase = basePrice + (total - basePrice - cagePrice) / LUXURY_PRICING[luxuryLevel].multiplier;
+    const surcharge = transportBase - basePrice;
+    const luxuryPrice = Math.round((transportBase * LUXURY_PRICING[luxuryLevel].multiplier - transportBase) * 100) / 100;
+    return { basePrice, surcharge, cagePrice, luxuryPrice, total };
+  }, [selectedPet, selectedRoute, selectedVehicle, pricingRules, cageType, luxuryLevel]);
 
   const insuranceInfo = useMemo(() => {
     if (!hasInsurance || !selectedInsuranceProduct) {
@@ -141,8 +124,10 @@ export default function OrderNew() {
       employee_id: employee?.id || '',
       cage_type: cageType,
       luxury_level: luxuryLevel,
+      cage_price: priceInfo.cagePrice,
+      luxury_price: priceInfo.luxuryPrice,
       base_price: priceInfo.basePrice,
-      surcharge: priceInfo.surcharge + insuranceInfo.premium + priceInfo.cagePrice + priceInfo.luxuryPremium,
+      surcharge: priceInfo.surcharge + insuranceInfo.premium,
       total_price: finalTotal,
       status: 'pending' as OrderStatus,
       pickup_time: pickupTime,
@@ -233,89 +218,6 @@ export default function OrderNew() {
               />
             </div>
 
-            <div className="mt-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                  <Box className="w-4 h-4 text-primary-500" />
-                  选择笼子类型
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {CAGE_OPTIONS.map((cage) => {
-                    const isSelected = cageType === cage.value;
-                    return (
-                      <button
-                        key={cage.value}
-                        type="button"
-                        onClick={() => setCageType(cage.value)}
-                        className={cn(
-                          'relative text-left p-4 rounded-xl border-2 transition-all duration-200',
-                          isSelected
-                            ? 'border-primary-500 bg-primary-50 shadow-sm'
-                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                        )}
-                      >
-                        {isSelected && (
-                          <div className="absolute top-2 right-2">
-                            <CheckCircle className="w-5 h-5 text-primary-500" />
-                          </div>
-                        )}
-                        <div className="text-2xl mb-2">{cage.icon}</div>
-                        <div className="font-semibold text-gray-800 text-sm mb-1">{cage.label}</div>
-                        <div className="text-xs text-gray-500 mb-2">{cage.desc}</div>
-                        <div className="text-sm font-bold text-primary-600">
-                          {cage.price === 0 ? '免费' : `+¥${cage.price}`}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  车辆豪华等级
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {LUXURY_OPTIONS.map((luxury) => {
-                    const isSelected = luxuryLevel === luxury.value;
-                    return (
-                      <button
-                        key={luxury.value}
-                        type="button"
-                        onClick={() => setLuxuryLevel(luxury.value)}
-                        className={cn(
-                          'relative text-left p-4 rounded-xl border-2 transition-all duration-200',
-                          isSelected
-                            ? luxury.value === 'vip'
-                              ? 'border-amber-500 bg-gradient-to-br from-amber-50 to-orange-50 shadow-sm'
-                              : luxury.value === 'luxury'
-                                ? 'border-purple-500 bg-purple-50 shadow-sm'
-                                : 'border-primary-500 bg-primary-50 shadow-sm'
-                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                        )}
-                      >
-                        {isSelected && (
-                          <div className="absolute top-2 right-2">
-                            <CheckCircle className={cn(
-                              'w-5 h-5',
-                              luxury.value === 'vip' ? 'text-amber-500' : luxury.value === 'luxury' ? 'text-purple-500' : 'text-primary-500'
-                            )} />
-                          </div>
-                        )}
-                        <div className="text-2xl mb-2">{luxury.icon}</div>
-                        <div className="font-semibold text-gray-800 text-sm mb-1">{luxury.label}</div>
-                        <div className="text-xs text-gray-500 mb-2">{luxury.desc}</div>
-                        <div className="text-sm font-bold text-primary-600">
-                          {luxury.multiplier === 1.0 ? '标准价' : `×${luxury.multiplier}倍`}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
             {selectedPet && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
@@ -338,6 +240,113 @@ export default function OrderNew() {
                 </div>
               </motion.div>
             )}
+          </Card>
+
+          <Card title="选择笼具" icon={<Box className="w-5 h-5" />}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {(Object.keys(CAGE_PRICING) as CageType[]).map((key) => {
+                const cage = CAGE_PRICING[key];
+                const isSelected = cageType === key;
+                return (
+                  <motion.button
+                    key={key}
+                    type="button"
+                    onClick={() => setCageType(key)}
+                    whileTap={{ scale: 0.97 }}
+                    className={`relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${
+                      isSelected
+                        ? 'border-primary-500 bg-primary-50 shadow-soft'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {isSelected && (
+                      <motion.div
+                        layoutId="cage-indicator"
+                        className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary-500 flex items-center justify-center"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5 text-white" />
+                      </motion.div>
+                    )}
+                    <div className="flex items-center gap-2 mb-2">
+                      <Box className={`w-5 h-5 ${isSelected ? 'text-primary-500' : 'text-gray-400'}`} />
+                      <span className={`font-semibold text-sm ${isSelected ? 'text-primary-700' : 'text-gray-800'}`}>
+                        {cage.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-2 leading-relaxed">{cage.description}</p>
+                    <p className={`text-lg font-bold ${isSelected ? 'text-primary-600' : 'text-gray-800'}`}>
+                      {formatPrice(cage.price)}
+                    </p>
+                  </motion.button>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card title="环境与车辆等级" icon={<Sparkles className="w-5 h-5" />}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {(Object.keys(LUXURY_PRICING) as LuxuryLevel[]).map((key) => {
+                const luxury = LUXURY_PRICING[key];
+                const isSelected = luxuryLevel === key;
+                const tagMap: Record<LuxuryLevel, string> = {
+                  '经济': '',
+                  '舒适': '推荐',
+                  '豪华': '热门',
+                  '尊享': 'VIP',
+                };
+                return (
+                  <motion.button
+                    key={key}
+                    type="button"
+                    onClick={() => setLuxuryLevel(key)}
+                    whileTap={{ scale: 0.97 }}
+                    className={`relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${
+                      isSelected
+                        ? key === '尊享'
+                          ? 'border-amber-500 bg-amber-50 shadow-soft'
+                          : 'border-primary-500 bg-primary-50 shadow-soft'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {isSelected && (
+                      <motion.div
+                        layoutId="luxury-indicator"
+                        className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center ${
+                          key === '尊享' ? 'bg-amber-500' : 'bg-primary-500'
+                        }`}
+                      >
+                        <CheckCircle className="w-3.5 h-3.5 text-white" />
+                      </motion.div>
+                    )}
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className={`w-5 h-5 ${
+                        isSelected
+                          ? key === '尊享' ? 'text-amber-500' : 'text-primary-500'
+                          : 'text-gray-400'
+                      }`} />
+                      <span className={`font-semibold text-sm ${
+                        isSelected
+                          ? key === '尊享' ? 'text-amber-700' : 'text-primary-700'
+                          : 'text-gray-800'
+                      }`}>
+                        {luxury.label}
+                      </span>
+                      {tagMap[key] && (
+                        <Badge variant={key === '尊享' ? 'warning' : 'info'}>{tagMap[key]}</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mb-2 leading-relaxed">{luxury.description}</p>
+                    <p className={`text-lg font-bold ${
+                      isSelected
+                        ? key === '尊享' ? 'text-amber-600' : 'text-primary-600'
+                        : 'text-gray-800'
+                    }`}>
+                      ×{luxury.multiplier}
+                    </p>
+                  </motion.button>
+                );
+              })}
+            </div>
           </Card>
 
           <Card title="收货信息" icon={<User className="w-5 h-5" />}>
@@ -540,18 +549,14 @@ export default function OrderNew() {
                     <span>{selectedVehicle.plate_number} · {selectedVehicle.vehicle_type}</span>
                   </div>
                 )}
-                {selectedCageOption && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Box className="w-4 h-4 text-primary-500" />
-                    <span>{selectedCageOption.icon} {selectedCageOption.label}</span>
-                  </div>
-                )}
-                {selectedLuxuryOption && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Sparkles className="w-4 h-4 text-amber-500" />
-                    <span>{selectedLuxuryOption.icon} {selectedLuxuryOption.label}</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Box className="w-4 h-4 text-gray-400" />
+                  <span>{CAGE_PRICING[cageType].label} - {CAGE_PRICING[cageType].description}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Sparkles className="w-4 h-4 text-gray-400" />
+                  <span>{LUXURY_PRICING[luxuryLevel].label} (×{LUXURY_PRICING[luxuryLevel].multiplier})</span>
+                </div>
                 {hasInsurance && selectedInsuranceProduct && (
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Shield className="w-4 h-4 text-primary-500" />
@@ -569,22 +574,20 @@ export default function OrderNew() {
                   <span className="text-gray-500">附加费</span>
                   <span className="font-medium text-gray-800">{formatPrice(priceInfo.surcharge)}</span>
                 </div>
-                {priceInfo.cagePrice > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500 flex items-center gap-1">
-                      <Box className="w-3.5 h-3.5" />
-                      {selectedCageOption?.label}费用
-                    </span>
-                    <span className="font-medium text-primary-600">{formatPrice(priceInfo.cagePrice)}</span>
-                  </div>
-                )}
-                {priceInfo.luxuryPremium > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 flex items-center gap-1">
+                    <Box className="w-3.5 h-3.5" />
+                    笼具费用
+                  </span>
+                  <span className="font-medium text-gray-800">{formatPrice(priceInfo.cagePrice)}</span>
+                </div>
+                {priceInfo.luxuryPrice > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500 flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5" />
-                      {selectedLuxuryOption?.label}升级费
+                      等级加价 (×{LUXURY_PRICING[luxuryLevel].multiplier})
                     </span>
-                    <span className="font-medium text-amber-600">{formatPrice(priceInfo.luxuryPremium)}</span>
+                    <span className="font-medium text-amber-600">{formatPrice(priceInfo.luxuryPrice)}</span>
                   </div>
                 )}
                 {hasInsurance && insuranceInfo.premium > 0 && (
