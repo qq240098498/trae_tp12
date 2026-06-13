@@ -1204,21 +1204,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     return validateTrackReportData(order, location, currentLoc);
   },
 
-  batchAddTransportLocations: (locations) =>
+  batchAddTransportLocations: (locations) => {
+    const now = new Date().toISOString();
+    const newLocations: TransportLocation[] = locations.map((loc) => ({
+      ...loc,
+      id: generateId(),
+      reported_at: now,
+    }));
     set((state) => {
-      const now = new Date().toISOString();
-      const newLocations: TransportLocation[] = locations.map((loc) => ({
-        ...loc,
-        id: generateId(),
-        reported_at: now,
-      }));
       const newState = {
         ...state,
         transportLocations: [...state.transportLocations, ...newLocations],
       };
       saveToStorage(newState);
       return newState;
-    }),
+    });
+    return newLocations;
+  },
 
   getLocationsByTimeRange: (startTime, endTime) => {
     const state = get();

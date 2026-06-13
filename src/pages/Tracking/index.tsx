@@ -229,8 +229,8 @@ export default function TrackingIndex() {
     const orderProgress = getOrderProgress(order.id);
 
     const timeSinceLastReport = getTimeSinceLastReportMinutes(currentLoc);
-    const frequencyStatus = getReportFrequencyStatus(allLocations);
     const avgInterval = calculateAvgIntervalMinutes(allLocations);
+    const frequencyStatus = getReportFrequencyStatus(avgInterval, timeSinceLastReport);
     const reportCount = getReportCount(order.id);
     const canReportNow = canReport(order.id);
 

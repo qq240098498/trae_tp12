@@ -258,6 +258,8 @@ export default function Dashboard() {
               leftIcon={
                 <RefreshCw
                   className={cn('w-4 h-4', isRefreshing ? 'animate-spin' : '')}
+                />
+              }
               onClick={refresh}
             >
               刷新
@@ -324,22 +326,18 @@ export default function Dashboard() {
           transition={{ delay: 0.35, duration: 0.4 }}
         >
           <Card
-          title="需要关注的运输"
-          icon={<AlertTriangle className="w-5 h-5 text-amber-500" />}
-          className="border-amber-200"
-        >
+            title="需要关注的运输"
+            icon={<AlertTriangle className="w-5 h-5 text-amber-500" />}
+            className="border-amber-200"
+          >
           <div className="space-y-3">
             {ordersNeedingAttention.slice(0, 3).map((progress, idx) => {
+              const timeSinceLastReport = progress.lastReportAt
+                ? (Date.now() - new Date(progress.lastReportAt).getTime()) / (1000 * 60)
+                : Infinity;
               const frequencyStatus = getReportFrequencyStatus(
-                allOrderProgress.find(
-                  (p) => p.orderId === progress.orderId,
-                )?.currentLocation
-                  ? [
-                      allOrderProgress.find(
-                        (p) => p.orderId === progress.orderId,
-                      )!.currentLocation!,
-                    ]
-                  : [],
+                progress.avgIntervalMinutes,
+                timeSinceLastReport,
               );
               return (
                 <motion.div
@@ -367,7 +365,7 @@ export default function Dashboard() {
                       className={cn(
                         'text-xs px-2 py-0.5 rounded-full',
                         getReportFrequencyStatusColor(frequencyStatus),
-                      }
+                      )}
                     >
                       {getReportFrequencyStatusText(frequencyStatus)}
                     </div>
@@ -376,7 +374,7 @@ export default function Dashboard() {
                         progress.lastReportAt
                           ? (Date.now() -
                               new Date(progress.lastReportAt).getTime()) /
-                            (1000 * 60
+                            (1000 * 60)
                           : 0,
                       )}
                     </div>
@@ -394,6 +392,7 @@ export default function Dashboard() {
             查看全部运输轨迹
           </Button>
         </Card>
+      </motion.div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -489,4 +488,165 @@ export default function Dashboard() {
                   className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-primary-50 to-primary-100 hover:from-primary-100 hover:to-primary-200 transition-all group"
                 >
                   <div className="w-11 h-11 rounded-xl bg-primary-500 flex items-center justify-center text-white">
-                    <Package className="w-5
+                    <Package className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium text-gray-800">新建运输订单</div>
+                    <div className="text-xs text-gray-500 mt-0.5">快速创建宠物运输订单</div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-primary-500 transition-colors" />
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02, x: 4 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate('/pets/new')}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-rose-50 to-rose-100 hover:from-rose-100 hover:to-rose-200 transition-all group"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-rose-500 flex items-center justify-center text-white">
+                    <PawPrint className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium text-gray-800">添加宠物档案</div>
+                    <div className="text-xs text-gray-500 mt-0.5">录入宠物信息建立档案</div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-rose-500 transition-colors" />
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02, x: 4 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate('/dispatch')}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 transition-all group"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-blue-500 flex items-center justify-center text-white">
+                    <Car className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium text-gray-800">车辆调度</div>
+                    <div className="text-xs text-gray-500 mt-0.5">分配车辆和司机进行运输</div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02, x: 4 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate('/tracking')}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 transition-all group"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-emerald-500 flex items-center justify-center text-white">
+                    <Navigation className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium text-gray-800">实时轨迹追踪</div>
+                    <div className="text-xs text-gray-500 mt-0.5">查看所有运输的实时位置</div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                </motion.button>
+              </div>
+            </Card>
+          </motion.div>
+
+          {topDrivers.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.4 }}
+            >
+              <Card
+                title="司机排行"
+                icon={<Award className="w-5 h-5 text-amber-500" />}
+              >
+                <div className="space-y-3">
+                  {topDrivers.slice(0, 3).map((driver, idx) => (
+                    <motion.div
+                      key={driver.name}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.55 + idx * 0.08, duration: 0.3 }}
+                      className="flex items-center justify-between p-3 rounded-xl bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm',
+                            idx === 0
+                              ? 'bg-amber-100 text-amber-600'
+                              : idx === 1
+                                ? 'bg-gray-200 text-gray-600'
+                                : 'bg-orange-100 text-orange-600',
+                          )}
+                        >
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-800 text-sm">
+                            {driver.name}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {driver.count} 次上报
+                          </div>
+                        </div>
+                      </div>
+                      <Users className="w-4 h-4 text-gray-400" />
+                    </motion.div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
+          {topVehicles.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55, duration: 0.4 }}
+            >
+              <Card
+                title="车辆排行"
+                icon={<Car className="w-5 h-5 text-blue-500" />}
+              >
+                <div className="space-y-3">
+                  {topVehicles.slice(0, 3).map((vehicle, idx) => (
+                    <motion.div
+                      key={vehicle.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.6 + idx * 0.08, duration: 0.3 }}
+                      className="flex items-center justify-between p-3 rounded-xl bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm',
+                            idx === 0
+                              ? 'bg-blue-100 text-blue-600'
+                              : idx === 1
+                                ? 'bg-gray-200 text-gray-600'
+                                : 'bg-cyan-100 text-cyan-600',
+                          )}
+                        >
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-800 text-sm">
+                            {vehicle.plateNumber}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {vehicle.count} 次上报
+                          </div>
+                        </div>
+                      </div>
+                      <Car className="w-4 h-4 text-gray-400" />
+                    </motion.div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

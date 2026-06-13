@@ -422,7 +422,13 @@ export function isReportOverdue(
   return timeSince > expectedIntervalMinutes * 2;
 }
 
-export function getReportFrequencyStatus(
+export {
+  getReportFrequencyStatus,
+  getReportFrequencyStatusText,
+  getReportFrequencyStatusColor,
+} from './trackUtils';
+
+export function getReportFrequencyStatusOld(
   locations: TransportLocation[],
 ): 'normal' | 'frequent' | 'infrequent' | 'none' {
   if (locations.length === 0) return 'none';
@@ -432,30 +438,6 @@ export function getReportFrequencyStatus(
   if (avgInterval < 15) return 'frequent';
   if (avgInterval > 120) return 'infrequent';
   return 'normal';
-}
-
-export function getReportFrequencyStatusText(
-  status: 'normal' | 'frequent' | 'infrequent' | 'none',
-): string {
-  const map = {
-    normal: '上报正常',
-    frequent: '上报频繁',
-    infrequent: '上报不足',
-    none: '暂无上报',
-  };
-  return map[status];
-}
-
-export function getReportFrequencyStatusColor(
-  status: 'normal' | 'frequent' | 'infrequent' | 'none',
-): string {
-  const map = {
-    normal: 'text-green-600 bg-green-50',
-    frequent: 'text-amber-600 bg-amber-50',
-    infrequent: 'text-red-600 bg-red-50',
-    none: 'text-gray-500 bg-gray-50',
-  };
-  return map[status];
 }
 
 export function calculateProgressPercent(
