@@ -27,6 +27,8 @@ import type {
   InsuranceType,
   ClaimReason,
   TransportLocation,
+  CageType,
+  LuxuryLevel,
 } from '@/types';
 import { generateId, generateOrderNo } from '@/utils';
 
@@ -173,6 +175,8 @@ function getMockData(): AppData {
       route_id: routes[0].id,
       vehicle_id: vehicles[1].id,
       employee_id: employees[1].id,
+      cage_type: 'reinforced' as CageType,
+      luxury_level: 'comfort' as LuxuryLevel,
       base_price: 50,
       surcharge: 30,
       total_price: 380,
@@ -194,6 +198,8 @@ function getMockData(): AppData {
       route_id: routes[1].id,
       vehicle_id: vehicles[0].id,
       employee_id: employees[0].id,
+      cage_type: 'standard' as CageType,
+      luxury_level: 'economy' as LuxuryLevel,
       base_price: 45,
       surcharge: 0,
       total_price: 165,

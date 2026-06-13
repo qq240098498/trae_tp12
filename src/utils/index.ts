@@ -13,6 +13,8 @@ import type {
   ClaimReason,
   InsurancePolicy,
   InsuranceClaim,
+  CageType,
+  LuxuryLevel,
 } from '@/types';
 
 export function generateId(): string {
@@ -72,6 +74,27 @@ export function calculatePrice(
   const basePrice = route.base_price;
 
   return basePrice + distancePrice + surcharge;
+}
+
+export const CAGE_CONFIG: Record<CageType, { label: string; desc: string; icon: string; price: number }> = {
+  standard: { label: '标准笼', desc: '常规运输笼，满足基本运输需求', icon: '📦', price: 0 },
+  reinforced: { label: '加固笼', desc: '加厚材质，防撞防逃，适合中大型犬', icon: '🛡️', price: 80 },
+  luxury: { label: '豪华笼', desc: '空间宽敞，内置水壶食盆，舒适透气', icon: '👑', price: 200 },
+};
+
+export const LUXURY_CONFIG: Record<LuxuryLevel, { label: string; desc: string; icon: string; multiplier: number }> = {
+  economy: { label: '经济型', desc: '普通运输车辆，标准服务', icon: '🚐', multiplier: 1.0 },
+  comfort: { label: '舒适型', desc: '空调恒温车厢，定时巡查', icon: '🚗', multiplier: 1.3 },
+  luxury: { label: '豪华型', desc: '独立空调舱，实时监控，专人陪护', icon: '🌟', multiplier: 1.8 },
+  vip: { label: 'VIP尊享', desc: '专车专送，一对一服务，全程直播', icon: '💎', multiplier: 2.5 },
+};
+
+export function getCageLabel(cageType: CageType): string {
+  return CAGE_CONFIG[cageType]?.label ?? '标准笼';
+}
+
+export function getLuxuryLabel(luxuryLevel: LuxuryLevel): string {
+  return LUXURY_CONFIG[luxuryLevel]?.label ?? '经济型';
 }
 
 export function getStatusText(status: OrderStatus): string {

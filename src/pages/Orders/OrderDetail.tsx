@@ -12,10 +12,13 @@ import {
   CheckCircle2,
   Star,
   Navigation,
+  Box,
+  Sparkles,
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
-import { formatDate, formatPrice, getStatusText } from '@/utils';
+import { formatDate, formatPrice, getStatusText, getCageLabel, getLuxuryLabel } from '@/utils';
+import { CAGE_CONFIG, LUXURY_CONFIG } from '@/utils';
 import type { OrderStatus as AppOrderStatus } from '@/types';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -368,6 +371,16 @@ export default function OrderDetail() {
                 label="员工"
                 value={employee ? `${employee.name} (${employee.employee_no})` : '-'}
                 icon={User}
+              />
+              <InfoItem
+                label="笼子类型"
+                value={order.cage_type ? `${CAGE_CONFIG[order.cage_type]?.icon || ''} ${getCageLabel(order.cage_type)}` : '-'}
+                icon={Box}
+              />
+              <InfoItem
+                label="车辆豪华等级"
+                value={order.luxury_level ? `${LUXURY_CONFIG[order.luxury_level]?.icon || ''} ${getLuxuryLabel(order.luxury_level)}` : '-'}
+                icon={Sparkles}
               />
             </div>
             {order.remark && (

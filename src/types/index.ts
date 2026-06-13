@@ -74,6 +74,9 @@ export interface PricingRule {
   surcharge: number;
 }
 
+export type CageType = 'standard' | 'reinforced' | 'luxury';
+export type LuxuryLevel = 'economy' | 'comfort' | 'luxury' | 'vip';
+
 export type OrderStatus = 'pending' | 'accepted' | 'picked_up' | 'in_transit' | 'arrived' | 'completed' | 'cancelled';
 
 export interface Order {
@@ -84,6 +87,8 @@ export interface Order {
   route_id: string;
   vehicle_id: string;
   employee_id: string;
+  cage_type: CageType;
+  luxury_level: LuxuryLevel;
   base_price: number;
   surcharge: number;
   total_price: number;

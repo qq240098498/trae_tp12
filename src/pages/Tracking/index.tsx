@@ -26,8 +26,9 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store';
-import { formatDate, getStatusText } from '@/utils';
+import { formatDate, getStatusText, getCageLabel, getLuxuryLabel } from '@/utils';
 import type { Order, TransportLocation } from '@/types';
+import { CAGE_CONFIG, LUXURY_CONFIG } from '@/utils';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -364,6 +365,32 @@ export default function TrackingIndex() {
                     </div>
                   )}
                 </div>
+
+                {(order.cage_type || order.luxury_level) && (
+                  <div className="flex gap-2 mb-4">
+                    {order.cage_type && CAGE_CONFIG[order.cage_type] && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 text-xs font-medium border border-primary-100">
+                        <span>{CAGE_CONFIG[order.cage_type].icon}</span>
+                        <span>{CAGE_CONFIG[order.cage_type].label}</span>
+                      </div>
+                    )}
+                    {order.luxury_level && LUXURY_CONFIG[order.luxury_level] && (
+                      <div className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border",
+                        order.luxury_level === 'vip'
+                          ? 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200'
+                          : order.luxury_level === 'luxury'
+                            ? 'bg-purple-50 text-purple-700 border-purple-100'
+                            : order.luxury_level === 'comfort'
+                              ? 'bg-blue-50 text-blue-700 border-blue-100'
+                              : 'bg-gray-50 text-gray-600 border-gray-200'
+                      )}>
+                        <span>{LUXURY_CONFIG[order.luxury_level].icon}</span>
+                        <span>{LUXURY_CONFIG[order.luxury_level].label}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {allLocations.length > 0 && (
                   <div className="mb-4">
